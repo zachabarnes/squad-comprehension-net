@@ -146,17 +146,17 @@ class Decoder(object):
         #but this is my current idea of what the paper looks like
 
         l = self.FLAGS.state_size
+
         V = tf.get_variable("V", [l,2*l], initializer=tf.contrib.layers.xavier_initializer())   #Use xavier initialization for weights, zeros for biases
         Wa = tf.get_variable("Wa", [l,l], initializer=tf.contrib.layers.xavier_initializer())
         ba = tf.Variable(tf.zeros([l]), name = "ba")
         v = tf.Variable(tf.zeros([l]), name = "v")
         c = tf.Variable(tf.zeros([1]), name = "c")
 
-        Hr_tilda = knowledge_rep
+        Hr = knowledge_rep
+        Hr_tilda = tf.concat([ Hr, tf.zeros([ 1, tf.shape(Hr_tilda)[1] ]) ], axis = 0)
 
         cell = tf.contrib.rnn.BasicLSTMCell(l) #self.size passed in through initialization from "state_size" flag
-
-        term1 = tf.matmul(V,Hr_tilda)  #
 
         B_k_1 = None
         B_k_2 = None
@@ -164,8 +164,9 @@ class Decoder(object):
         for i in xrange(0, 2):
             # just two iterations for the start point and end point
             term2 = Wa*state + ba  # should be an l dimensional vec
-            #term2 = #term2.broadcast across passage length to end up with an l x passage_length matrix where every column is the same
-            F_k = tf.tanh(term1 + term2)
+            eq = tf.ones()
+            term2 = #term2.broadcast across passage length to end up with an l x passage_length matrix where every column is the same
+            F_k = tf.tanh(tf.matmul(V,Hr_tilda) + term2)
             B_k_term1 = tf.matmul(v.T, F_k)
             #B_k_term2 = #c.broadcast across passage length to end up with a 1 x passage_length matrix where every element is the same
             if i == 0:
@@ -248,10 +249,8 @@ class QASystem(object):
         :return:
         """
         with vs.variable_scope("loss"):
-
-            l1 = sparse_softmax_cross_entropy_with_logits(self.a_s, self.start_answer_placeholder)
-            l2 = sparse_softmax_cross_entropy_with_logits(self.a_e, self.end_answer_placeholder)
-            self.loss = l1 + l2 #Simple additive loss
+            p = self.Beta_s[:,self.start_answer_placeholder] * self.Beta_e[:,self.end_answer_placeholder]   #First column is for batches?
+            self.loss = -tf.reduce_sum(tf.log(p))
 
     def setup_embeddings(self):
         """
