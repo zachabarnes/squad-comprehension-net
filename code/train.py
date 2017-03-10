@@ -83,11 +83,35 @@ def convert_to_vocab_number(filename):
         return_val = []
         with tf.gfile.GFile(filename, mode="rb") as f:
             return_val.extend(f.readlines())
+        return_val = [ [int(word) for word in line.strip('\n').split()] for line in return_val]
+        return return_val
+    else:
+        raise ValueError("Vocabulary file %s not found.", vocab_path)
+
+def convert_to_vocab_number_except_dont(filename):
+    return_val = []
+    if tf.gfile.Exists(filename):
+        return_val = []
+        with tf.gfile.GFile(filename, mode="rb") as f:
+            return_val.extend(f.readlines())
         return_val = [ [word for word in line.strip('\n').split()] for line in return_val]
         return return_val
     else:
         raise ValueError("Vocabulary file %s not found.", vocab_path)
 
+def pad_inputs(data, max_length):
+    padded_data = []
+    mask_data = []
+    for data in data:
+        length = len(data)
+        if length >= max_length:
+            padded_data.append(data[:max_length])
+            mask_data.append([1]*max_length)
+        else:
+            pad_length = max_length-length
+            padded_data.append(data + [0]*pad_length)
+            mask_data.append([1]*length + [0]*pad_length)
+    return padded_data, mask_data
 
 def get_dataset():
     '''
@@ -112,20 +136,30 @@ def get_dataset():
     val_context_path = os.path.join(FLAGS.data_dir, "val.ids.context")
 
     train_questions = convert_to_vocab_number(train_questions_path)
-    train_answer = convert_to_vocab_number(train_answer_path)
     train_span = convert_to_vocab_number(train_span_path)
     train_context = convert_to_vocab_number(train_context_path)
     val_questions = convert_to_vocab_number(val_questions_path)
-    val_answer = convert_to_vocab_number(val_answer_path)
     val_span = convert_to_vocab_number(val_span_path)
     val_context = convert_to_vocab_number(val_context_path)
 
-    return {"train_questions": train_questions,
-            "train_context": train_context,
+    train_answer = convert_to_vocab_number_except_dont(train_answer_path)
+    val_answer = convert_to_vocab_number_except_dont(val_answer_path)
+
+    train_questions_padded, train_questions_mask = pad_inputs(train_questions, FLAGS.max_question_size)
+    train_context_padded, train_context_mask = pad_inputs(train_context, FLAGS.max_paragraph_size)
+    val_questions_padded, val_questions_mask = pad_inputs(val_questions, FLAGS.max_question_size)
+    val_context_padded, val_context_mask = pad_inputs(val_context, FLAGS.max_paragraph_size)
+
+    return {"train_questions": train_questions_padded,
+            "train_questions_mask":train_questions_mask,
+            "train_context": train_context_padded,
+            "train_context_mask":train_context_mask,
             "train_answer": train_answer,
             "train_span": train_span,
-            "val_questions": val_questions,
-            "val_context": val_context,
+            "val_questions": val_questions_padded,
+            "val_questions_mask":val_questions_mask,
+            "val_context": val_context_padded,
+            "val_context_mask":val_context_mask,
             "val_answer": val_answer,
             "val_span": val_span}
 
@@ -133,8 +167,6 @@ def main(_):
 
     # Do what you need to load datasets from FLAGS.data_dir
     dataset = get_dataset()
-
-    print(dataset[0])
 
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
     FLAGS.embed_path = embed_path
