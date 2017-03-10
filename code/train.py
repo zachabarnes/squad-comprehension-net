@@ -120,7 +120,14 @@ def get_dataset():
     val_span = convert_to_vocab_number(val_span_path)
     val_context = convert_to_vocab_number(val_context_path)
 
-    return [train_questions, train_context, train_answer, train_span, val_questions, val_context, val_answer, val_span] #Should we split Train and Val up? No reason to keep them in the same dataset object
+    return {"train_questions": train_questions,
+            "train_context": train_context,
+            "train_answer": train_answer,
+            "train_span": train_span,
+            "val_questions": val_questions,
+            "val_context": val_context,
+            "val_answer": val_answer,
+            "val_span": val_span}
 
 def main(_):
 

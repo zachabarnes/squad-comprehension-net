@@ -238,8 +238,8 @@ class QASystem(object):
         to assemble your reading comprehension system!
         :return:
         """
-        hr = self.encoder.encode((self.paragraph_embedding, self.question_embedding), self.paragraph_mask_placeholder)
-        self.a_s, self.a_e = self.decoder.decode(hr)
+        Hr = self.encoder.encode((self.paragraph_embedding, self.question_embedding), self.paragraph_mask_placeholder)
+        self.Beta_s, self.Beta_e = self.decoder.decode(Hr)
 
     def setup_loss(self):
         """
@@ -247,6 +247,7 @@ class QASystem(object):
         :return:
         """
         with vs.variable_scope("loss"):
+
             l1 = sparse_softmax_cross_entropy_with_logits(self.a_s, self.start_answer_placeholder)
             l2 = sparse_softmax_cross_entropy_with_logits(self.a_e, self.end_answer_placeholder)
             self.loss = l1 + l2 #Simple additive loss
@@ -263,24 +264,7 @@ class QASystem(object):
             self.paragraph_embedding = tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder)
             self.question_embedding = tf.nn.embedding_lookup(embeddings,self.question_placeholder)
 
-    def optimize(self, session, train_x, train_y):
-        """
-        Takes in actual data to optimize your model
-        This method is equivalent to a step() function
-        :return:
-        """
-        input_feed = {}
-
-
-        # fill in this feed_dictionary like:
-        # input_feed['train_x'] = train_x
-
-        output_feed = []
-
-        outputs = session.run(output_feed, input_feed)
-
-        return outputs
-
+    '''
     def test(self, session, valid_x, valid_y):
         """
         in here you should compute a cost for your validation set
@@ -378,6 +362,25 @@ class QASystem(object):
             logging.info("F1: {}, EM: {}, for {} samples".format(f1, em, sample))
 
         return f1, em
+    '''
+
+    def optimize(self, session, train_x, train_y):
+        """
+        Takes in actual data to optimize your model
+        This method is equivalent to a step() function
+        :return:
+        """
+        input_feed = {}
+
+
+        # fill in this feed_dictionary like:
+        # input_feed['train_x'] = train_x
+
+        output_feed = []
+
+        outputs = session.run(output_feed, input_feed)
+
+        return outputs
 
     def train(self, session, dataset, train_dir):
         """
@@ -414,3 +417,8 @@ class QASystem(object):
         num_params = sum(map(lambda t: np.prod(tf.shape(t.value()).eval()), params))
         toc = time.time()
         logging.info("Number of params: %d (retreival took %f secs)" % (num_params, toc - tic))
+
+        # For 10 Epochs
+        #   Train on Epoch
+        #   Evaluate
+        #   Save Parameters
