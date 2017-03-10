@@ -30,9 +30,10 @@ def get_optimizer(opt):
 
 
 class Encoder(object):
-    def __init__(self, size, vocab_dim):
+    def __init__(self, size, vocab_dim, FLAGS):
         self.size = size
         self.vocab_dim = vocab_dim
+        self.FLAGS = FLAGS
 
     def encode(self, inputs, masks, encoder_state_input = None):
         """
@@ -57,6 +58,38 @@ class Encoder(object):
         #                                                 scope = scope,
         #                                                 time_major = True,
         #                                                 dtype = dtypes.float32)
+
+        cell = tf.contrib.rnn.BasicLSTMCell(self.size) #self.size passed in through initialization from "state_size" flag
+
+        #Got the below from the following link. 
+        #https://github.com/aymericdamien/TensorFlow-Examples/blob/master/examples/3_NeuralNetworks/recurrent_network.py
+        #We have a tensor of size [None, embedding, n_words]
+        #We convert to [n_words, None, embedding] in order to do this
+        x_1 =  tf.transpose(inputs[0], [2, 0, 1])
+        # Reshaping to (n_steps*batch_size, n_input)
+        x_1 = tf.reshape(x_1, [-1, self.FLAGS.embedding_size])
+        # Split to get a list of 'n_steps' tensors of shape (batch_size, n_input)
+        x_1 = tf.split(x_1, self.FLAGS.max_paragraph_size, 0)
+        _, HP = tf.contrib.rnn.static_rnn(cell, x_1, dtype=tf.float64)
+        # I want this to be size "self.size" by Passage
+
+        cell_2 = tf.contrib.rnn.BasicLSTMCell(self.size) #self.size passed in through initialization from "state_size" flag
+        x_2 =  tf.transpose(inputs[0], [2, 0, 1])
+        # Reshaping to (n_steps*batch_size, n_input)
+        x_2 = tf.reshape(x_2, [-1, self.FLAGS.embedding_size])
+        # Split to get a list of 'n_steps' tensors of shape (batch_size, n_input)
+        x_2 = tf.split(x_2, self.FLAGS.max_question_size, 0)
+        _, HQ = tf.contrib.rnn.static_rnn(cell_2, x_2, dtype=tf.float64)
+        # I want this to be size "self.size" by Question
+
+        WQ = tf.Variable(tf.zeros([self.size,self.size])) #l by l (aka self.size by self.size)
+        WP = tf.Variable(tf.zeros([self.size,self.size])) #l by l (aka self.size by self.size)
+        WR = tf.Variable(tf.zeros([self.size,self.size])) #l by l (aka self.size by self.size)
+        bP = tf.Variable(tf.zeros([self.size])) #l (aka self.size)
+        w = tf.Variable(tf.zeros([self.size])) #l (aka self.size)
+
+        term_1 = tf.matmul(WQ,HQ)
+
 
         #Encode paragraphs
         return inputs
@@ -313,7 +346,7 @@ class QASystem(object):
         # you will also want to save your model parameters in train_dir
         # so that you can use your trained model to make predictions, or
         # even continue training
-        print(dataset[:5])
+        #print(dataset[:5])
         tic = time.time()
         params = tf.trainable_variables()
         num_params = sum(map(lambda t: np.prod(tf.shape(t.value()).eval()), params))

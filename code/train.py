@@ -77,18 +77,63 @@ def get_normalized_train_dir(train_dir):
     os.symlink(os.path.abspath(train_dir), global_train_dir)
     return global_train_dir
 
+def convert_to_vocab_number(filename):
+    return_val = []
+    if tf.gfile.Exists(filename):
+        return_val = []
+        with tf.gfile.GFile(filename, mode="rb") as f:
+            return_val.extend(f.readlines())
+        return_val = [ [word for word in line.strip('\n').split()] for line in return_val]
+        return return_val
+    else:
+        raise ValueError("Vocabulary file %s not found.", vocab_path)
+
+
+def get_dataset():
+    '''
+    Dataset will have a list with the following order:
+    train question ids
+    train context ids
+    train answers
+    train span
+    val question ids
+    val context ids
+    val answer
+    val span
+    '''
+
+    train_questions_path = os.path.join(FLAGS.data_dir, "train.ids.question")
+    train_answer_path = os.path.join(FLAGS.data_dir, "train.answer")
+    train_span_path = os.path.join(FLAGS.data_dir, "train.span")
+    train_context_path = os.path.join(FLAGS.data_dir, "train.ids.context")
+    val_questions_path = os.path.join(FLAGS.data_dir, "val.ids.question")
+    val_answer_path = os.path.join(FLAGS.data_dir, "val.answer")
+    val_span_path = os.path.join(FLAGS.data_dir, "val.span")
+    val_context_path = os.path.join(FLAGS.data_dir, "val.ids.context")
+
+    train_questions = convert_to_vocab_number(train_questions_path)
+    train_answer = convert_to_vocab_number(train_answer_path)
+    train_span = convert_to_vocab_number(train_span_path)
+    train_context = convert_to_vocab_number(train_context_path)
+    val_questions = convert_to_vocab_number(val_questions_path)
+    val_answer = convert_to_vocab_number(val_answer_path)
+    val_span = convert_to_vocab_number(val_span_path)
+    val_context = convert_to_vocab_number(val_context_path)
+
+    return [train_questions, train_context, train_answer, train_span, val_questions, val_context, val_answer, val_span]
 
 def main(_):
 
     # Do what you need to load datasets from FLAGS.data_dir
-    dataset = None
+    dataset = get_dataset()
+
 
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
     FLAGS.embed_path = embed_path
     vocab_path = FLAGS.vocab_path or pjoin(FLAGS.data_dir, "vocab.dat")
     vocab, rev_vocab = initialize_vocab(vocab_path)
 
-    encoder = Encoder(size=FLAGS.state_size, vocab_dim=FLAGS.embedding_size)
+    encoder = Encoder(size=FLAGS.state_size, vocab_dim=FLAGS.embedding_size, FLAGS=FLAGS)
     decoder = Decoder(output_size=FLAGS.output_size)
 
     qa = QASystem(encoder, decoder, FLAGS)
