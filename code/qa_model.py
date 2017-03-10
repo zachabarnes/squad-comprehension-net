@@ -34,7 +34,7 @@ class Encoder(object):
         self.size = size
         self.vocab_dim = vocab_dim
 
-    def encode(self, inputs, masks, encoder_state_input):
+    def encode(self, inputs, masks, encoder_state_input = None):
         """
         In a generalized encode function, you pass in your inputs,
         masks, and an initial
@@ -50,16 +50,16 @@ class Encoder(object):
                  or both.
         """
         #Encode question
-        (fw_out, bw_out), _ = bidirectional_dynamic_rnn(self.cell,
-                                                        self.cell,
-                                                        inp,
-                                                        srclen,
-                                                        scope = scope,
-                                                        time_major = True,
-                                                        dtype = dtypes.float32)
+        # (fw_out, bw_out), _ = bidirectional_dynamic_rnn(self.cell,
+        #                                                 self.cell,
+        #                                                 inp,
+        #                                                 srclen,
+        #                                                 scope = scope,
+        #                                                 time_major = True,
+        #                                                 dtype = dtypes.float32)
 
         #Encode paragraphs
-        return
+        return inputs
 
 class Decoder(object):
     def __init__(self, output_size):
@@ -77,14 +77,17 @@ class Decoder(object):
                               decided by how you choose to implement the encoder
         :return:
         """
-        with vs.scope("answer_start"):
-            self.a_s = rnn_cell._linear([h_q, h_p], output_size = self.output_size)
-        with vs.scope("answer_end"):
-            self.a_e = rnn_cell._linear([h_q, h_p], output_size = self.output_size)
-        return
+        # with vs.variable_scope("answer_start"):
+        #     a_s = rnn_cell._linear([h_q, h_p], output_size = self.output_size)
+        # with vs.variable_scope("answer_end"):
+        #     a_e = rnn_cell._linear([h_q, h_p], output_size = self.output_size)
+        # return a_s, a_e
+
+        return ([0.0]*300,[0.0]*300)
+
 
 class QASystem(object):
-    def __init__(self, encoder, decoder, *args):
+    def __init__(self, encoder, decoder, FLAGS, *args):
         """
         Initializes your System
 
@@ -92,9 +95,21 @@ class QASystem(object):
         :param decoder: a decoder that you constructed in train.py
         :param args: pass in more arguments as needed
         """
+        self.encoder = encoder
+        self.decoder = decoder
+        self.FLAGS = FLAGS
+
+        # ==== set up variables ========
+        self.learning_rate = tf.Variable(float(self.FLAGS.learning_rate), trainable = False)
+        self.global_step = tf.Variable(int(0), trainable = True)
 
         # ==== set up placeholder tokens ========
-
+        self.paragraph_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
+        self.question_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_question_size), name="question_placeholder")
+        self.start_answer_placeholder = tf.placeholder(tf.int32, (None), name="start_answer_placeholder")
+        self.end_answer_placeholder = tf.placeholder(tf.int32, (None), name="end_answer_placeholder")
+        self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (None,self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
+        self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
         # ==== assemble pieces ====
         with tf.variable_scope("qa", initializer=tf.uniform_unit_scaling_initializer(1.0)):
@@ -102,8 +117,26 @@ class QASystem(object):
             self.setup_system()
             self.setup_loss()
 
-        # ==== set up training/updating procedure ====
-        pass
+        # ==== set up training/updating procedure ==
+        # params = tf.trainable_variables()
+
+        opt_function = get_optimizer(self.FLAGS.optimizer)
+        optimizer = opt_function(self.learning_rate)
+
+        # gradients = tf.gradients(self.loss, params)
+        # clipped_gradients, norm = tf.clip_by_global_norm(gradients, self.FLAGS.max_gradient_norm)
+        # self.gradient_norms = norm
+
+        # self.updates = opt.apply_gradients(zip(clipped_gradients, params), global_step=self.global_step)
+        grads_and_vars = optimizer.compute_gradients(self.loss)
+        grads = [g for g, v in grads_and_vars]
+        variables = [v for g, v in grads_and_vars]
+        self.grad_norm = tf.global_norm(grads)
+        grads, _ = tf.clip_by_global_norm(grads, self.FLAGS.max_gradient_norm)
+        grads_and_vars = [(grads[i], variables[i]) for i, v in enumerate(variables)]
+        train_op = optimizer.apply_gradients(grads_and_vars)
+
+        self.saver = tf.train.Saver(tf.global_variables())
 
 
     def setup_system(self):
@@ -113,8 +146,8 @@ class QASystem(object):
         to assemble your reading comprehension system!
         :return:
         """
-        raise NotImplementedError("Connect all parts of your system here!")
-
+        hr = self.encoder.encode((self.paragraph_embedding, self.question_embedding), self.paragraph_mask_placeholder)
+        self.a_s, self.a_e = self.decoder.decode(hr)
 
     def setup_loss(self):
         """
@@ -122,8 +155,8 @@ class QASystem(object):
         :return:
         """
         with vs.variable_scope("loss"):
-            l1 = sparse_softmax_cross_entropy_with_logits(self.a_s, self.start_answer)
-            l2 = sparse_softmax_cross_entropy_with_logits(self.a_e, self.end_answer)
+            l1 = sparse_softmax_cross_entropy_with_logits(self.a_s, self.start_answer_placeholder)
+            l2 = sparse_softmax_cross_entropy_with_logits(self.a_e, self.end_answer_placeholder)
             self.loss = l1 + l2 #Simple additive loss
 
     def setup_embeddings(self):
@@ -132,7 +165,10 @@ class QASystem(object):
         :return:
         """
         with vs.variable_scope("embeddings"):
-            pass
+            embed_file = np.load(self.FLAGS.embed_path)
+            embeddings = embed_file['glove']
+            self.paragraph_embedding = tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder)
+            self.question_embedding = tf.nn.embedding_lookup(embeddings,self.question_placeholder)
 
     def optimize(self, session, train_x, train_y):
         """
@@ -141,6 +177,7 @@ class QASystem(object):
         :return:
         """
         input_feed = {}
+
 
         # fill in this feed_dictionary like:
         # input_feed['train_x'] = train_x
@@ -229,13 +266,18 @@ class QASystem(object):
         :param log: whether we print to std out stream
         :return:
         """
-        
-        for (q,p,a) in dataset:
+        f1_list = []
+        em_list = []
+        subdataset = random.sample(dataset, sample)
+        for (q,p,a) in subdataset:
             a_s,a_e = self.answer(session,(q,p))
             answer = p[a_s, a_e + 1]
             true_answer = p[true_s, true_e + 1]
-            f1 = f1_score(answer, true_answer)
-            em = exact_match_score(answer, true_answer)
+            f1_list.append(f1_score(answer, true_answer))
+            em_list.append(exact_match_score(answer, true_answer))
+
+        f1 = sum(f1_list)/float(len(f1_list) + 10**(-5))
+        em = sum(em_list)/float(len(em_list) + 10**(-5))
 
         if log:
             logging.info("F1: {}, EM: {}, for {} samples".format(f1, em, sample))
@@ -271,7 +313,7 @@ class QASystem(object):
         # you will also want to save your model parameters in train_dir
         # so that you can use your trained model to make predictions, or
         # even continue training
-
+        print(dataset[:5])
         tic = time.time()
         params = tf.trainable_variables()
         num_params = sum(map(lambda t: np.prod(tf.shape(t.value()).eval()), params))
