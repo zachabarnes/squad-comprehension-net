@@ -59,6 +59,10 @@ class Encoder(object):
         #                                                 time_major = True,
         #                                                 dtype = dtypes.float32)
 
+        ### Right now the way we set everything up, the first dimension of each input is arbitrary
+        ### If we don't want to handle batching for now, I'm not exactly what to change but I think
+        ### it can be traced back to self.paragraph_placeholder
+
         cell = tf.contrib.rnn.BasicLSTMCell(self.size) #self.size passed in through initialization from "state_size" flag
 
         #Got the below from the following link. 
@@ -82,6 +86,10 @@ class Encoder(object):
         _, HQ = tf.contrib.rnn.static_rnn(cell_2, x_2, dtype=tf.float64)
         # I want this to be size "self.size" by Question
 
+
+        ### Calculate equation 2, https://arxiv.org/pdf/1608.07905.pdf
+        ### The equation is kind of weird because of h arrow, so this calculation will
+        ### involve the LSTM, and the LSTM's states will become H^r right
         WQ = tf.Variable(tf.zeros([self.size,self.size])) #l by l (aka self.size by self.size)
         WP = tf.Variable(tf.zeros([self.size,self.size])) #l by l (aka self.size by self.size)
         WR = tf.Variable(tf.zeros([self.size,self.size])) #l by l (aka self.size by self.size)
@@ -90,6 +98,13 @@ class Encoder(object):
 
         term_1 = tf.matmul(WQ,HQ)
 
+
+        ### Calculate everything we just did but backwards (should be pretty much the same code)
+        ### Doesn't initialize new variables because they are reused
+
+
+        ### Append the two things calculated above into H^R
+        ### Return H^R (Or multiple H^R if handling batching)
 
         #Encode paragraphs
         return inputs
@@ -115,6 +130,22 @@ class Decoder(object):
         # with vs.variable_scope("answer_end"):
         #     a_e = rnn_cell._linear([h_q, h_p], output_size = self.output_size)
         # return a_s, a_e
+
+
+
+        # We need to calculate equations 7 and 8 from the paper to get Beta_k variables
+        # I imagine this code will look similar to the encoding part where we had to 
+        # do equation 2 from the paper.
+
+        # Beta_k will be a P length vector, storing a probability for each word (basically
+        # will this word be the start word)
+        # This is what we need to use to calculate the loss function they give us,
+        # and importantly, it's already softmax'd. The loss will need to be changed
+        # to be -log(Beta_1_i * Beta_2_j) where i is the actual start token, and j is the actual end token.
+
+        # I think we just need two Beta_k's, one for start and one for end. If
+        # we just return these as our predictions that should be the end of this function.
+
 
         return ([0.0]*300,[0.0]*300)
 
