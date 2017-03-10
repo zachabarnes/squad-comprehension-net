@@ -10,6 +10,10 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 from tensorflow.python.ops import variable_scope as vs
 
+from tensorflow.python.ops.nn import sparse_softmax_cross_entropy_with_logits
+from tensorflow.python.ops.nn import bidirectional_dynamic_rnn
+from tensorflow.python.ops.nn import dynamic_rnn
+
 from evaluate import exact_match_score, f1_score
 
 logging.basicConfig(level=logging.INFO)
@@ -45,9 +49,17 @@ class Encoder(object):
                  It can be context-level representation, word-level representation,
                  or both.
         """
+        #Encode question
+        (fw_out, bw_out), _ = bidirectional_dynamic_rnn(self.cell,
+                                                        self.cell,
+                                                        inp,
+                                                        srclen,
+                                                        scope = scope,
+                                                        time_major = True,
+                                                        dtype = dtypes.float32)
 
+        #Encode paragraphs
         return
-
 
 class Decoder(object):
     def __init__(self, output_size):
@@ -65,7 +77,10 @@ class Decoder(object):
                               decided by how you choose to implement the encoder
         :return:
         """
-
+        with vs.scope("answer_start"):
+            self.a_s = rnn_cell._linear([h_q, h_p], output_size = self.output_size)
+        with vs.scope("answer_end"):
+            self.a_e = rnn_cell._linear([h_q, h_p], output_size = self.output_size)
         return
 
 class QASystem(object):
@@ -107,7 +122,9 @@ class QASystem(object):
         :return:
         """
         with vs.variable_scope("loss"):
-            pass
+            l1 = sparse_softmax_cross_entropy_with_logits(self.a_s, self.start_answer)
+            l2 = sparse_softmax_cross_entropy_with_logits(self.a_e, self.end_answer)
+            self.loss = l1 + l2 #Simple additive loss
 
     def setup_embeddings(self):
         """
@@ -212,9 +229,13 @@ class QASystem(object):
         :param log: whether we print to std out stream
         :return:
         """
-
-        f1 = 0.
-        em = 0.
+        
+        for (q,p,a) in dataset:
+            a_s,a_e = self.answer(session,(q,p))
+            answer = p[a_s, a_e + 1]
+            true_answer = p[true_s, true_e + 1]
+            f1 = f1_score(answer, true_answer)
+            em = exact_match_score(answer, true_answer)
 
         if log:
             logging.info("F1: {}, EM: {}, for {} samples".format(f1, em, sample))
