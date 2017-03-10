@@ -365,7 +365,7 @@ class QASystem(object):
         return f1, em
     '''
 
-    def optimize(self, session, train_x, train_y):
+    def optimize(self, session, train_q, train_q_mask, train_p, train_p_mask, train_span):
         """
         Takes in actual data to optimize your model
         This method is equivalent to a step() function
@@ -373,11 +373,20 @@ class QASystem(object):
         """
         input_feed = {}
 
+        start_ans = train_span[0]
+        end_ans = train_span[1]
 
-        # fill in this feed_dictionary like:
-        # input_feed['train_x'] = train_x
+        input_feed['qustion_placeholder'] = np.array(train_q)
+        input_feed['paragraph_placeholder'] = np.array(train_p)
+        input_feed['start_answer_placeholder'] = start_ans
+        input_feed['end_answer_placeholder'] = end_ans
+        input_feed['paragraph_mask_placeholder'] = np.array(train_p_mask)
+        input_feed['dropout_placeholder'] = self.FLAGS.dropout
 
         output_feed = []
+
+        output_feed.append(self.train_op)
+        output_feed.append(self.loss)
 
         outputs = session.run(output_feed, input_feed)
 
@@ -412,12 +421,22 @@ class QASystem(object):
         # you will also want to save your model parameters in train_dir
         # so that you can use your trained model to make predictions, or
         # even continue training
-        #print(dataset[:5])
+
+
+
         tic = time.time()
         params = tf.trainable_variables()
         num_params = sum(map(lambda t: np.prod(tf.shape(t.value()).eval()), params))
         toc = time.time()
         logging.info("Number of params: %d (retreival took %f secs)" % (num_params, toc - tic))
+
+        train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"])
+        for cur_epoch in range(self.FLAGS.epochs):
+            for _ in range(train_data):
+                (q, q_mask, p, p_mask, a) = random.choice(train_data)
+
+                outputs = self.optimize(session, )
+
 
         # For 10 Epochs
         #   Train on Epoch
