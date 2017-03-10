@@ -35,7 +35,7 @@ class Encoder(object):
         self.vocab_dim = vocab_dim
         self.FLAGS = FLAGS
 
-    def encode(self, inputs, masks, encoder_state_input = None):
+    def encode(self, inputs, masks, encoder_state_input = None):    # LSTM Preprocessing and Match-LSTM Layers
         """
         In a generalized encode function, you pass in your inputs,
         masks, and an initial
@@ -113,7 +113,7 @@ class Decoder(object):
     def __init__(self, output_size):
         self.output_size = output_size
 
-    def decode(self, knowledge_rep):
+    def decode(self, knowledge_rep):    # Answer Pointer Layer
         """
         takes in a knowledge representation
         and output a probability estimation over
@@ -125,13 +125,6 @@ class Decoder(object):
                               decided by how you choose to implement the encoder
         :return:
         """
-        # with vs.variable_scope("answer_start"):
-        #     a_s = rnn_cell._linear([h_q, h_p], output_size = self.output_size)
-        # with vs.variable_scope("answer_end"):
-        #     a_e = rnn_cell._linear([h_q, h_p], output_size = self.output_size)
-        # return a_s, a_e
-
-
 
         # We need to calculate equations 7 and 8 from the paper to get Beta_k variables
         # I imagine this code will look similar to the encoding part where we had to 
@@ -146,21 +139,23 @@ class Decoder(object):
         # I think we just need two Beta_k's, one for start and one for end. If
         # we just return these as our predictions that should be the end of this function.
 
-        '''
-        Terrible start code:
+        
+        #Terrible start code:
         #Disclaimer: this could all be wrong, some dimensions could be wrong, 
         #but this is my current idea of what the paper looks like
 
         l =        # TODO: figure out how to pass in the flag that describes number of hidden layers of encoder
-        V = tf.Variable(tf.zeros([l,2*l]))
-        Wa = tf.Variable(tf.zeros([l,l]))
-        ba = tf.Variable(tf.zeros([l]))
-        v = tf.Variable(tf.zeros([l]))
-        c = tf.Variable(tf.zeros([1]))
+        V = tf.get_variable("V", [l,2*l], initializer=tf.contrib.layers.xavier_initializer())   #Use xavier initialization for weights, zeros for biases
+        Wa = tf.get_variable("Wa", [l,l], initializer=tf.contrib.layers.xavier_initializer())
+        ba = tf.Variable(tf.zeros([l]), name = "ba")
+        v = tf.Variable(tf.zeros([l]), name = "v")
+        c = tf.Variable(tf.zeros([1]), name = "c")
+
+        Hr_tilda = knowledge_rep
 
         cell = tf.contrib.rnn.BasicLSTMCell(l) #self.size passed in through initialization from "state_size" flag
 
-        term1 = tf.matmul(V,knowledge_rep)
+        term1 = tf.matmul(V,Hr_tilda)  #
 
         B_k_1 = None
         B_k_2 = None
@@ -168,20 +163,16 @@ class Decoder(object):
         for i in xrange(0, 2):
             # just two iterations for the start point and end point
             term2 = Wa*state + ba  # should be an l dimensional vec
-            term2 = term2.broadcast across passage length to end up with an l x passage_length matrix where every column is the same
+            term2 = #term2.broadcast across passage length to end up with an l x passage_length matrix where every column is the same
             F_k = tf.tanh(term1 + term2)
             B_k_term1 = tf.matmul(v.T, F_k)
-            B_k_term2 = c.broadcast across passage length to end up with a 1 x passage_length matrix where every element is the same
+            B_k_term2 = #c.broadcast across passage length to end up with a 1 x passage_length matrix where every element is the same
             if i == 0:
                 B_k_1 = tf.softmax(B_k_term1 + B_k_term2)
                 _, state = cell.step(tf.matmul(knowledge_rep,B_k_1.T))  
             else:
                 B_k_2 = tf.softmax(B_k_term1 + B_k_term2)
                 _, state = cell.step(tf.matmul(knowledge_rep,B_k_2.T))
-
-
-
-        '''
 
 
         return ([0.0]*300,[0.0]*300)
@@ -221,7 +212,7 @@ class QASystem(object):
         # ==== set up training/updating procedure ==
         # params = tf.trainable_variables()
 
-        opt_function = get_optimizer(self.FLAGS.optimizer)
+        opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
         optimizer = opt_function(self.learning_rate)
 
         # gradients = tf.gradients(self.loss, params)
@@ -267,7 +258,8 @@ class QASystem(object):
         """
         with vs.variable_scope("embeddings"):
             embed_file = np.load(self.FLAGS.embed_path)
-            embeddings = embed_file['glove']
+            pretrained_embeddings = embed_file['glove']
+            embeddings = tf.Variable(pretrained_embeddings, name = "embeddings")
             self.paragraph_embedding = tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder)
             self.question_embedding = tf.nn.embedding_lookup(embeddings,self.question_placeholder)
 
@@ -367,6 +359,8 @@ class QASystem(object):
         :param log: whether we print to std out stream
         :return:
         """
+
+        # TODO: Look at evaluate function from evaluate.py
         f1_list = []
         em_list = []
         subdataset = random.sample(dataset, sample)
