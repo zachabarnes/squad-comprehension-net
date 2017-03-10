@@ -176,8 +176,8 @@ def main(_):
     # ========= Model-specific =========
     # You must change the following code to adjust to your model
 
-    encoder = Encoder(size=FLAGS.state_size, vocab_dim=FLAGS.embedding_size)
-    decoder = Decoder(output_size=FLAGS.output_size)
+    encoder = Encoder(size=FLAGS.state_size, vocab_dim=FLAGS.embedding_size, FLAGS=FLAGS)
+    decoder = Decoder(output_size=FLAGS.output_size, FLAGS=FLAGS)
 
     qa = QASystem(encoder, decoder)
 

@@ -110,8 +110,9 @@ class Encoder(object):
         return inputs
 
 class Decoder(object):
-    def __init__(self, output_size):
+    def __init__(self, output_size, FLAGS):
         self.output_size = output_size
+        self.FlAGS = FLAGS
 
     def decode(self, knowledge_rep):    # Answer Pointer Layer
         """
@@ -144,7 +145,7 @@ class Decoder(object):
         #Disclaimer: this could all be wrong, some dimensions could be wrong, 
         #but this is my current idea of what the paper looks like
 
-        l =        # TODO: figure out how to pass in the flag that describes number of hidden layers of encoder
+        l = self.FLAGS.state_size
         V = tf.get_variable("V", [l,2*l], initializer=tf.contrib.layers.xavier_initializer())   #Use xavier initialization for weights, zeros for biases
         Wa = tf.get_variable("Wa", [l,l], initializer=tf.contrib.layers.xavier_initializer())
         ba = tf.Variable(tf.zeros([l]), name = "ba")
@@ -163,10 +164,10 @@ class Decoder(object):
         for i in xrange(0, 2):
             # just two iterations for the start point and end point
             term2 = Wa*state + ba  # should be an l dimensional vec
-            term2 = #term2.broadcast across passage length to end up with an l x passage_length matrix where every column is the same
+            #term2 = #term2.broadcast across passage length to end up with an l x passage_length matrix where every column is the same
             F_k = tf.tanh(term1 + term2)
             B_k_term1 = tf.matmul(v.T, F_k)
-            B_k_term2 = #c.broadcast across passage length to end up with a 1 x passage_length matrix where every element is the same
+            #B_k_term2 = #c.broadcast across passage length to end up with a 1 x passage_length matrix where every element is the same
             if i == 0:
                 B_k_1 = tf.softmax(B_k_term1 + B_k_term2)
                 _, state = cell.step(tf.matmul(knowledge_rep,B_k_1.T))  

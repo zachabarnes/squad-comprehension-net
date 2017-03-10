@@ -134,6 +134,7 @@ def main(_):
     # Do what you need to load datasets from FLAGS.data_dir
     dataset = get_dataset()
 
+    print(dataset[0])
 
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
     FLAGS.embed_path = embed_path
@@ -141,7 +142,7 @@ def main(_):
     vocab, rev_vocab = initialize_vocab(vocab_path)
 
     encoder = Encoder(size=FLAGS.state_size, vocab_dim=FLAGS.embedding_size, FLAGS=FLAGS)
-    decoder = Decoder(output_size=FLAGS.output_size)
+    decoder = Decoder(output_size=FLAGS.output_size, FLAGS=FLAGS)
 
     qa = QASystem(encoder, decoder, FLAGS)
 
