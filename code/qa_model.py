@@ -146,6 +146,43 @@ class Decoder(object):
         # I think we just need two Beta_k's, one for start and one for end. If
         # we just return these as our predictions that should be the end of this function.
 
+        '''
+        Terrible start code:
+        #Disclaimer: this could all be wrong, some dimensions could be wrong, 
+        #but this is my current idea of what the paper looks like
+
+        l =        # TODO: figure out how to pass in the flag that describes number of hidden layers of encoder
+        V = tf.Variable(tf.zeros([l,2*l]))
+        Wa = tf.Variable(tf.zeros([l,l]))
+        ba = tf.Variable(tf.zeros([l]))
+        v = tf.Variable(tf.zeros([l]))
+        c = tf.Variable(tf.zeros([1]))
+
+        cell = tf.contrib.rnn.BasicLSTMCell(l) #self.size passed in through initialization from "state_size" flag
+
+        term1 = tf.matmul(V,knowledge_rep)
+
+        B_k_1 = None
+        B_k_2 = None
+        state = cell.zero_state()
+        for i in xrange(0, 2):
+            # just two iterations for the start point and end point
+            term2 = Wa*state + ba  # should be an l dimensional vec
+            term2 = term2.broadcast across passage length to end up with an l x passage_length matrix where every column is the same
+            F_k = tf.tanh(term1 + term2)
+            B_k_term1 = tf.matmul(v.T, F_k)
+            B_k_term2 = c.broadcast across passage length to end up with a 1 x passage_length matrix where every element is the same
+            if i == 0:
+                B_k_1 = tf.softmax(B_k_term1 + B_k_term2)
+                _, state = cell.step(tf.matmul(knowledge_rep,B_k_1.T))  
+            else:
+                B_k_2 = tf.softmax(B_k_term1 + B_k_term2)
+                _, state = cell.step(tf.matmul(knowledge_rep,B_k_2.T))
+
+
+
+        '''
+
 
         return ([0.0]*300,[0.0]*300)
 
