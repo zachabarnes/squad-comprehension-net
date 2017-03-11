@@ -65,6 +65,7 @@ class Encoder(object):
         input_question = tf.expand_dims(input_question, axis = 0)
         input_paragraph = tf.expand_dims(input_paragraph, axis = 0)
 
+        #Preprocessing LSTM
         with tf.variable_scope("question_encode"):
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.size) #self.size passed in through initialization from "state_size" flag
             HQ, _ = tf.nn.dynamic_rnn(cell, tf.transpose(input_question,[0,2,1]), dtype = tf.float32)
@@ -93,6 +94,7 @@ class Encoder(object):
         term_1 = tf.matmul(WQ, HQ)
         HPs = tf.unstack(HP, axis = 1)
 
+        # Forward Match-LSTM
         with tf.variable_scope("right_match_LSTM"):
             cell_r = tf.nn.rnn_cell.BasicLSTMCell(self.size)
             cell_state = cell_r.zero_state(self.FLAGS.batch_size,tf.float32)
@@ -114,6 +116,8 @@ class Encoder(object):
                 hrs.append(hr)
             HR_right = tf.concat(1,hrs)
 
+        ### Calculate everything we just did but backwards (should be pretty much the same code)
+        ### Doesn't initialize new variables because they are reused
         with tf.variable_scope("left_match_LSTM"):
             cell_l = tf.nn.rnn_cell.BasicLSTMCell(self.size)
             cell_state = cell_l.zero_state(self.FLAGS.batch_size,tf.float32)
@@ -135,17 +139,11 @@ class Encoder(object):
                 hrs.append(hr)
             HR_left = tf.concat(1,hrs)
         
+        ### Append the two things calculated above into H^R
         HR = tf.concat(0,[HR_right,HR_left])
         print("HR dims: " + str(HR.get_shape().as_list()))
 
-        ### Calculate everything we just did but backwards (should be pretty much the same code)
-        ### Doesn't initialize new variables because they are reused
-
-
-        ### Append the two things calculated above into H^R
         ### Return H^R (Or multiple H^R if handling batching)
-
-        #Encode paragraphs
         return HR
 
 class Decoder(object):

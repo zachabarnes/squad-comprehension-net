@@ -24,8 +24,6 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-FLAGS = tf.app.flags.FLAGS
-
 tf.app.flags.DEFINE_float("learning_rate", 0.001, "Learning rate.")
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
 tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
@@ -41,6 +39,8 @@ tf.app.flags.DEFINE_string("embed_path", "", "Path to the trimmed GLoVe embeddin
 tf.app.flags.DEFINE_string("dev_path", "data/squad/dev-v1.1.json", "Path to the JSON dev set to evaluate against (default: ./data/squad/dev-v1.1.json)")
 tf.app.flags.DEFINE_integer("max_paragraph_size", 300, "The length to cut paragraphs off at")   # As per Frank's histogram
 tf.app.flags.DEFINE_integer("max_question_size", 20, "The length to cut question off at")   # As per Frank's histogram
+
+FLAGS = tf.app.flags.FLAGS
 
 def read_dataset(dataset, tier, vocab):
     """Reads the dataset, extracts context, question, answer,
@@ -126,7 +126,7 @@ def main(_):
 
     vocab, rev_vocab = initialize_vocab(FLAGS.vocab_path)
 
-    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
+    FLAGS.embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
 
     if not os.path.exists(FLAGS.log_dir):
         os.makedirs(FLAGS.log_dir)
@@ -151,7 +151,7 @@ def main(_):
     encoder = Encoder(size=FLAGS.state_size, vocab_dim=FLAGS.embedding_size, FLAGS=FLAGS)
     decoder = Decoder(output_size=FLAGS.output_size, FLAGS=FLAGS)
 
-    qa = QASystem(encoder, decoder)
+    qa = QASystem(encoder, decoder, FLAGS)
 
     with tf.Session() as sess:
         train_dir = get_normalized_train_dir(FLAGS.train_dir)
