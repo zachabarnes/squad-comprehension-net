@@ -136,7 +136,7 @@ class Encoder(object):
             HR_left = tf.concat(1,hrs)
         
         HR = tf.concat(0,[HR_right,HR_left])
-        print(HR)
+        print("HR dims: " + str(HR.get_shape().as_list()))
 
         ### Calculate everything we just did but backwards (should be pretty much the same code)
         ### Doesn't initialize new variables because they are reused
@@ -151,7 +151,7 @@ class Encoder(object):
 class Decoder(object):
     def __init__(self, output_size, FLAGS):
         self.output_size = output_size
-        self.FlAGS = FLAGS
+        self.FLAGS = FLAGS
 
     def decode(self, knowledge_rep):    # Answer Pointer Layer
         """
@@ -177,19 +177,21 @@ class Decoder(object):
 
         Hr = knowledge_rep  #The first (0th) dimension of this will be of size batch_size
 
-        cell = tf.nn.BasicLSTMCell(l) #self.size passed in through initialization from "state_size" flag
+        cell = tf.nn.rnn_cell.BasicLSTMCell(l) #self.size passed in through initialization from "state_size" flag
 
         B = [None, None]
-        state = cell.zero_state()
+        cell_state = cell.zero_state(self.FLAGS.batch_size, tf.float32)
+        hk = tf.transpose(cell_state[1])
         for i, _ in enumerate(B):  # just two iterations for the start point and end point
             # Fk calculation
-            Whb = Wa*state + ba  # should be an l dimensional vec
+            Whb = Wa*hk + ba  # should be an l dimensional vec
             eP = tf.ones([1, P]) 
             Fk = tf.tanh(tf.matmul(V,Hr) + tf.matmul(tf.transpose(Whb), eP))  #Replicate Whb P+1 times
             
             # Bs and Be calculation
             B[i] = tf.softmax(tf.matmul(tf.transpose(v), Fk) + tf.matmul(tf.transpose(c), eP))     #Replicate c P+1 times
-            _, state = cell.step(tf.matmul(knowledge_rep, tf.transpose(B[i])))  
+            cell_input = tf.matmul(knowledge_rep, tf.transpose(B[i]))
+            hk, cell_state = cell(cell_input, cell_state)  
 
         return tuple(B) # Bs, Be
 
