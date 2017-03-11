@@ -112,7 +112,7 @@ def generate_answers(sess, model, dataset, rev_vocab):
 
     for question, context, uuid in unified_dataset:
         token_answer = model.answer(sess, question, context)
-        answer = []
+        sentence = []
         for token in token_answer:
             word = rev_vocab[token]
             sentence.append(word)

@@ -213,7 +213,7 @@ class QASystem(object):
         self.learning_rate = tf.Variable(float(self.FLAGS.learning_rate), trainable = False, name = "learning_rate")
         self.global_step = tf.Variable(int(0), trainable = True, name = "global_step")
 
-        # # ==== set up placeholder tokens ========
+        # # ==== set up placeholder tokens ======== 3d (because of batching)
         # self.paragraph_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
         # self.question_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_question_size), name="question_placeholder")
         # self.start_answer_placeholder = tf.placeholder(tf.int32, (None), name="start_answer_placeholder")
@@ -221,7 +221,7 @@ class QASystem(object):
         # self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (None, self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
         # self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
-  # ==== set up placeholder tokens ======== 2d
+        # ==== set up placeholder tokens ======== 2d
         self.paragraph_placeholder = tf.placeholder(tf.int32, (self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
         self.question_placeholder = tf.placeholder(tf.int32, (self.FLAGS.max_question_size), name="question_placeholder")
         self.start_answer_placeholder = tf.placeholder(tf.int32, (), name="start_answer_placeholder")
@@ -318,7 +318,7 @@ class QASystem(object):
 
         return a_s, a_e
 
-    def evaluate_answer(self, session, dataset, sample=100, log=False):
+    def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
         """
         Evaluate the model's performance using the harmonic mean of F1 and Exact Match (EM)
         with the set of true answer labels
@@ -334,24 +334,38 @@ class QASystem(object):
         :return:
         """
 
-        f1_list, em_list = [], []
-        temp_dataset = zip(dataset["val_questions"], dataset["val_context"], dataset["val_span"])
-        subdataset = random.sample(dataset, sample)
-        for question, paragraph, answer in subdataset:
-            a_s,a_e = self.answer(session,question,paragraph)
-            true_s, true_e = answer[0], answer[1]
-            our_answer = p[a_s : a_e + 1]           #The slice of the context paragraph that is our answer
-            true_answer = p[true_s : true_e + 1]    #The slice of the context paragraph that is the true answer
-            f1_list.append(f1_score(our_answer, true_answer))
-            em_list.append(exact_match_score(our_answer, true_answer))
+        temp_dataset = zip(dataset["val_questions"], dataset["val_context"], dataset["val_answer"])
+        sample_dataset = random.sample(dataset, sample)
+        our_answers = []
+        for question, paragraph, true_answer in sample_dataset:
+            a_s, a_e = self.answer(session, question, paragraph)
+            token_answer = p[a_s : a_e + 1]           #The slice of the context paragraph that is our answer
 
-        f1 = sum(f1_list)/float(len(f1_list))
-        em = sum(em_list)/float(len(em_list))
+            sentence = []
+            for token in token_answer:
+                word = rev_vocab[token]
+                sentence.append(word)
+
+            our_answers.append(' '.join(word for word in sentence))
+
+        f1 = exact_match = total = 0
+        answer_tuples = zip(dataset["val_answer"], our_answers)
+        for ground_truth, prediction in answer_tuples:
+            total += 1
+            exact_match += exact_match_score(prediction, ground_truth)
+            f1 += f1_score(prediction, ground_truth)
+
+        exact_match = 100.0 * exact_match / total
+        f1 = 100.0 * f1 / total
 
         if log:
-            logging.info("F1: {}, EM: {}, for {} samples".format(f1, em, sample))
+            logging.info("F1: {}, EM: {}, for {} samples".format(f1, exact_match, sample))
+            logging.info("Samples:")
+            for i in xrange(min(5, sample)):
+                ground_truth, our_answer = answer_tuples[i]
+                logging.info("Ground Truth: {}, Our Answer: {}".format(ground_truth, our_answer))
 
-        return f1, em
+        return f1, exact_match
     
 
     def optimize(self, session, train_q, train_q_mask, train_p, train_p_mask, train_span):
@@ -381,7 +395,7 @@ class QASystem(object):
 
         return loss
 
-    def train(self, session, dataset, train_dir):
+    def train(self, session, dataset, train_dir, rev_vocab):
         """
         Implement main training loop
 
@@ -429,7 +443,7 @@ class QASystem(object):
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     print("Loss: %s" % mean_loss)
 
-            self.evaluate_answer(session, dataset, sample=100, log=True)
+            self.evaluate_answer(session, dataset, rev_vocab, sample=100, log=True)
 
             #Save model after each epoch
             checkpoint_path = os.path.join(train_dir, model_name, start_time,"model.ckpt")
