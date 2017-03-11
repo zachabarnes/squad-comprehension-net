@@ -6,6 +6,8 @@ import time
 import logging
 import os
 import copy
+import random
+from datetime import datetime
 
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
@@ -127,7 +129,7 @@ class Encoder(object):
                 if i > 0:
                     tf.get_variable_scope().reuse_variables()
                 hp_i = tf.expand_dims(hp_i, axis=1)
-                term2 = tf.matmul(WP,hp_i) + tf.matmul(WR,hr) +bP
+                term2 = tf.matmul(WP,hp_i) + tf.matmul(WR,hr) + bP
                 eQ = tf.ones([1, Q]) 
                 G_i = tf.matmul(term2, eQ)
                 a_i = tf.nn.softmax(tf.matmul(tf.transpose(w),G_i) + b*eQ)
@@ -142,8 +144,6 @@ class Encoder(object):
         ### Append the two things calculated above into H^R
         HR = tf.concat(0,[HR_right,HR_left])
         print("HR dims: " + str(HR.get_shape().as_list()))
-
-        ### Return H^R (Or multiple H^R if handling batching)
         return HR
 
 class Decoder(object):
@@ -169,8 +169,8 @@ class Decoder(object):
 
         V = tf.get_variable("V", [l,2*l], initializer=tf.contrib.layers.xavier_initializer())   #Use xavier initialization for weights, zeros for biases
         Wa = tf.get_variable("Wa", [l,l], initializer=tf.contrib.layers.xavier_initializer())
-        ba = tf.Variable(tf.zeros([l]), name = "ba")
-        v = tf.Variable(tf.zeros([l]), name = "v")
+        ba = tf.Variable(tf.zeros([l,1]), name = "ba")
+        v = tf.Variable(tf.zeros([l,1]), name = "v")
         c = tf.Variable(tf.zeros([1]), name = "c")
 
         Hr = knowledge_rep  #The first (0th) dimension of this will be of size batch_size
@@ -181,17 +181,22 @@ class Decoder(object):
         cell_state = cell.zero_state(self.FLAGS.batch_size, tf.float32)
         hk = tf.transpose(cell_state[1])
         for i, _ in enumerate(B):  # just two iterations for the start point and end point
-            # Fk calculation
-            Whb = Wa*hk + ba  # should be an l dimensional vec
+            if i > 0:
+                tf.get_variable_scope().reuse_variables()
+            Whb = tf.matmul(Wa,hk) + ba  # should be an l dimensional vec
             eP = tf.ones([1, P]) 
-            Fk = tf.tanh(tf.matmul(V,Hr) + tf.matmul(tf.transpose(Whb), eP))  #Replicate Whb P+1 times
+            Fk = tf.tanh(tf.matmul(V,Hr) + tf.matmul(Whb, eP))  #Replicate Whb P+1 times
             
             # Bs and Be calculation
-            B[i] = tf.softmax(tf.matmul(tf.transpose(v), Fk) + tf.matmul(tf.transpose(c), eP))     #Replicate c P+1 times
-            cell_input = tf.matmul(knowledge_rep, tf.transpose(B[i]))
-            hk, cell_state = cell(cell_input, cell_state)  
+            beta = tf.nn.softmax(tf.matmul(tf.transpose(v), Fk) + c*eP)    #Replicate c P+1 times
+            B[i] = beta
+            cell_input = tf.matmul(Hr, tf.transpose(beta))
+            hk, cell_state = cell(tf.transpose(cell_input), cell_state)
+            hk = tf.transpose(hk)
 
-        return tuple(B) # Bs, Be
+        print("Beta_s Dims:" + str(B[0].get_shape().as_list()))
+        print("Beta_e Dims:" + str(B[1].get_shape().as_list()))
+        return tuple(B) # Bs, Be [batchsize, paragraph_length]
 
 
 class QASystem(object):
@@ -209,7 +214,7 @@ class QASystem(object):
 
         # ==== set up variables ========
         self.learning_rate = tf.Variable(float(self.FLAGS.learning_rate), trainable = False, name = "learning_rate")
-        self.global_step = tf.Variable(int(0), trainable = True, name = "global_step")
+        self.global_step = tf.Variable(int(0), trainable = False, name = "global_step")
 
         # # ==== set up placeholder tokens ======== 3d (because of batching)
         # self.paragraph_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
@@ -250,7 +255,7 @@ class QASystem(object):
         self.grad_norm = tf.global_norm(grads)
         grads, _ = tf.clip_by_global_norm(grads, self.FLAGS.max_gradient_norm)
         grads_and_vars = [(grads[i], variables[i]) for i, v in enumerate(variables)]
-        train_op = optimizer.apply_gradients(grads_and_vars)
+        self.train_op = optimizer.apply_gradients(grads_and_vars)
 
         self.saver = tf.train.Saver(tf.global_variables())
 
@@ -286,8 +291,7 @@ class QASystem(object):
         with vs.variable_scope("embeddings"):
             embed_file = np.load(self.FLAGS.embed_path)
             pretrained_embeddings = embed_file['glove']
-            embeddings = tf.Variable(pretrained_embeddings, name = "embeddings")
-            embeddings = tf.cast(embeddings, tf.float32)
+            embeddings = tf.Variable(pretrained_embeddings, name = "embeddings", dtype=tf.float32, trainable = False)
             self.paragraph_embedding = tf.transpose(tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder), [1,0])
             self.question_embedding = tf.transpose(tf.nn.embedding_lookup(embeddings,self.question_placeholder), [1,0])
 
@@ -298,8 +302,8 @@ class QASystem(object):
         :return:
         """
         input_feed = {}
-        input_feed['question_placeholder'] = self.question_placeholder
-        input_feed['paragraph_placeholder'] = self.paragraph_placeholder
+        input_feed[self.question_placeholder] = np.array(question)
+        input_feed[self.paragraph_placeholder] = np.array(paragraph)
 
         output_feed = [self.Beta_s, self.Beta_e]
 
@@ -377,12 +381,12 @@ class QASystem(object):
         start_ans = train_span[0]
         end_ans = train_span[1]
 
-        input_feed['qustion_placeholder'] = np.array(train_q)
-        input_feed['paragraph_placeholder'] = np.array(train_p)
-        input_feed['start_answer_placeholder'] = start_ans
-        input_feed['end_answer_placeholder'] = end_ans
-        input_feed['paragraph_mask_placeholder'] = np.array(train_p_mask)
-        input_feed['dropout_placeholder'] = self.FLAGS.dropout
+        input_feed[self.question_placeholder] = np.array(train_q)
+        input_feed[self.paragraph_placeholder] = np.array(train_p)
+        input_feed[self.start_answer_placeholder] = start_ans
+        input_feed[self.end_answer_placeholder] = end_ans
+        input_feed[self.paragraph_mask_placeholder] = np.array(train_p_mask)
+        input_feed[self.dropout_placeholder] = self.FLAGS.dropout
 
         output_feed = []
 
@@ -429,16 +433,16 @@ class QASystem(object):
         model_name = "match-lstm"
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"])
+        num_data = len(train_data)
         for cur_epoch in range(self.FLAGS.epochs):
             losses = []
-            for i in range(train_data):
-
-                (q, q_mask, p, p_mask, a) = random.choice(train_data)
-
+            for i in range(num_data):
+                (q, q_mask, p, p_mask, span) = random.choice(train_data)
                 loss = self.optimize(session, q, q_mask, p, p_mask, span)
                 losses.append(loss)
                 if i % 100 == 0 and i != 0:
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
+                    print("EPOCH %d: %d/%d".format(cur_epoch,i,num_data))
                     print("Loss: %s" % mean_loss)
 
             self.evaluate_answer(session, dataset, rev_vocab, sample=100, log=True)
@@ -447,6 +451,6 @@ class QASystem(object):
             checkpoint_path = os.path.join(train_dir, model_name, start_time,"model.ckpt")
             if not os.path.exists(checkpoint_path):
                 os.makedirs(checkpoint_path)
-            save_path = saver.save(sess,  checkpoint_path)
+            save_path = saver.save(sess, checkpoint_path)
             print("Model saved in file: %s" % save_path)
 
