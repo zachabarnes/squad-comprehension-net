@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import time
 import logging
+import copy
 
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
@@ -35,7 +36,7 @@ class Encoder(object):
         self.vocab_dim = vocab_dim
         self.FLAGS = FLAGS
 
-    def encode(self, inputs, masks, encoder_state_input = None):    # LSTM Preprocessing and Match-LSTM Layers
+    def encode(self, input_question, input_paragraph, masks, encoder_state_input = None):    # LSTM Preprocessing and Match-LSTM Layers
         """
         In a generalized encode function, you pass in your inputs,
         masks, and an initial
@@ -50,53 +51,43 @@ class Encoder(object):
                  It can be context-level representation, word-level representation,
                  or both.
         """
-        #Encode question
-        # (fw_out, bw_out), _ = bidirectional_dynamic_rnn(self.cell,
-        #                                                 self.cell,
-        #                                                 inp,
-        #                                                 srclen,
-        #                                                 scope = scope,
-        #                                                 time_major = True,
-        #                                                 dtype = dtypes.float32)
+        question_shape = input_question.get_shape().as_list()
+        paragraph_shape = input_paragraph.get_shape().as_list()
+        assert question_shape == [None, self.FLAGS.embedding_size, self.FLAGS.max_question_size]
+        assert paragraph_shape == [None, self.FLAGS.embedding_size, self.FLAGS.max_paragraph_size]
+
 
         ### Right now the way we set everything up, the first dimension of each input is arbitrary
         ### If we don't want to handle batching for now, I'm not exactly what to change but I think
         ### it can be traced back to self.paragraph_placeholder
 
-        cell = tf.contrib.rnn.BasicLSTMCell(self.size) #self.size passed in through initialization from "state_size" flag
-
-        #Got the below from the following link. 
-        #https://github.com/aymericdamien/TensorFlow-Examples/blob/master/examples/3_NeuralNetworks/recurrent_network.py
-        #We have a tensor of size [None, embedding, n_words]
-        #We convert to [n_words, None, embedding] in order to do this
-        x_1 =  tf.transpose(inputs[0], [2, 0, 1])
-        # Reshaping to (n_steps*batch_size, n_input)
-        x_1 = tf.reshape(x_1, [-1, self.FLAGS.embedding_size])
-        # Split to get a list of 'n_steps' tensors of shape (batch_size, n_input)
-        x_1 = tf.split(x_1, self.FLAGS.max_paragraph_size, 0)
-        _, HP = tf.contrib.rnn.static_rnn(cell, x_1, dtype=tf.float64)
-        # I want this to be size "self.size" by Passage
-
-        cell_2 = tf.contrib.rnn.BasicLSTMCell(self.size) #self.size passed in through initialization from "state_size" flag
-        x_2 =  tf.transpose(inputs[0], [2, 0, 1])
-        # Reshaping to (n_steps*batch_size, n_input)
-        x_2 = tf.reshape(x_2, [-1, self.FLAGS.embedding_size])
-        # Split to get a list of 'n_steps' tensors of shape (batch_size, n_input)
-        x_2 = tf.split(x_2, self.FLAGS.max_question_size, 0)
-        _, HQ = tf.contrib.rnn.static_rnn(cell_2, x_2, dtype=tf.float64)
-        # I want this to be size "self.size" by Question
-
+        with tf.variable_scope("question_encode"):
+            cell = tf.nn.rnn_cell.BasicLSTMCell(self.size) #self.size passed in through initialization from "state_size" flag
+            HQ, _ = tf.nn.dynamic_rnn(cell, tf.transpose(input_question,[0,2,1]), dtype = tf.float32)
+            HQ = tf.transpose(HQ, [0,2,1])
+        with tf.variable_scope("paragraph_encode"):
+            cell2 = tf.nn.rnn_cell.BasicLSTMCell(self.size)
+            HP, _ = tf.nn.dynamic_rnn(cell2, tf.transpose(input_paragraph,[0,2,1]), dtype = tf.float32)
+            HP = tf.transpose(HP, [0,2,1])
 
         ### Calculate equation 2, https://arxiv.org/pdf/1608.07905.pdf
         ### The equation is kind of weird because of h arrow, so this calculation will
         ### involve the LSTM, and the LSTM's states will become H^r right
-        WQ = tf.Variable(tf.zeros([self.size,self.size])) #l by l (aka self.size by self.size)
-        WP = tf.Variable(tf.zeros([self.size,self.size])) #l by l (aka self.size by self.size)
-        WR = tf.Variable(tf.zeros([self.size,self.size])) #l by l (aka self.size by self.size)
+        l = self.size
+        Q = self.FLAGS.max_question_size
+        P = self.FLAGS.max_paragraph_size
+        WQ = tf.get_variable("WQ", [l,l], initializer=tf.contrib.layers.xavier_initializer())
+        WP = tf.get_variable("WB", [l,l], initializer=tf.contrib.layers.xavier_initializer())
+        WR = tf.get_variable("WR", [l,l], initializer=tf.contrib.layers.xavier_initializer())
         bP = tf.Variable(tf.zeros([self.size])) #l (aka self.size)
         w = tf.Variable(tf.zeros([self.size])) #l (aka self.size)
 
-        term_1 = tf.matmul(WQ,HQ)
+        print (HQ.get_shape().as_list())
+        HQ_shaped = tf.reshape(HQ, [-1, l])
+        term_1 = tf.matmul(HQ_shaped,WQ)
+        term_1 = tf.reshape(term_1, [-1, Q, l])
+        term_1 = tf.transpose(term_1, [0,2,1])
+        print(term_1)
 
 
         ### Calculate everything we just did but backwards (should be pretty much the same code)
@@ -183,14 +174,14 @@ class QASystem(object):
 
         # ==== set up variables ========
         self.learning_rate = tf.Variable(float(self.FLAGS.learning_rate), trainable = False)
-        self.global_step = tf.Variable(int(0), trainable = True)
+        self.global_step = tf.Variable(int(0), trainable = False)
 
         # ==== set up placeholder tokens ========
         self.paragraph_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
         self.question_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_question_size), name="question_placeholder")
         self.start_answer_placeholder = tf.placeholder(tf.int32, (None), name="start_answer_placeholder")
         self.end_answer_placeholder = tf.placeholder(tf.int32, (None), name="end_answer_placeholder")
-        self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (None,self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
+        self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (None, self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
         self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
         # ==== assemble pieces ====
@@ -228,7 +219,7 @@ class QASystem(object):
         to assemble your reading comprehension system!
         :return:
         """
-        Hr = self.encoder.encode((self.paragraph_embedding, self.question_embedding), self.paragraph_mask_placeholder)
+        Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.paragraph_mask_placeholder)
         self.Beta_s, self.Beta_e = self.decoder.decode(Hr)
 
     def setup_loss(self):
@@ -253,8 +244,9 @@ class QASystem(object):
             embed_file = np.load(self.FLAGS.embed_path)
             pretrained_embeddings = embed_file['glove']
             embeddings = tf.Variable(pretrained_embeddings, name = "embeddings")
-            self.paragraph_embedding = tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder)
-            self.question_embedding = tf.nn.embedding_lookup(embeddings,self.question_placeholder)
+            embeddings = tf.cast(embeddings, tf.float32)
+            self.paragraph_embedding = tf.transpose(tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder), [0,2,1])
+            self.question_embedding = tf.transpose(tf.nn.embedding_lookup(embeddings,self.question_placeholder), [0,2,1])
 
     '''
     def test(self, session, valid_x, valid_y):
@@ -413,8 +405,6 @@ class QASystem(object):
         # so that you can use your trained model to make predictions, or
         # even continue training
 
-
-
         tic = time.time()
         params = tf.trainable_variables()
         num_params = sum(map(lambda t: np.prod(tf.shape(t.value()).eval()), params))
@@ -424,12 +414,13 @@ class QASystem(object):
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"])
         for cur_epoch in range(self.FLAGS.epochs):
             for _ in range(train_data):
-                (q, q_mask, p, p_mask, a) = random.choice(train_data)
+                (q, q_mask, p, p_mask, span) = random.choice(train_data)
+                outputs = self.optimize(session, q, q_mask, p, p_mask, span)
 
-                outputs = self.optimize(session, )
+            #do validation 
 
 
-        # For 10 Epochs
-        #   Train on Epoch
-        #   Evaluate
-        #   Save Parameters
+
+
+
+
