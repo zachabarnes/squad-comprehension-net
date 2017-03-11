@@ -133,19 +133,14 @@ class Decoder(object):
 
         # Beta_k will be a P length vector, storing a probability for each word (basically
         # will this word be the start word)
-        # This is what we need to use to calculate the loss function they give us,
-        # and importantly, it's already softmax'd. The loss will need to be changed
-        # to be -log(Beta_1_i * Beta_2_j) where i is the actual start token, and j is the actual end token.
+
 
         # I think we just need two Beta_k's, one for start and one for end. If
         # we just return these as our predictions that should be the end of this function.
 
-        
-        #Terrible start code:
-        #Disclaimer: this could all be wrong, some dimensions could be wrong, 
-        #but this is my current idea of what the paper looks like
 
         l = self.FLAGS.state_size
+        P = self.FLAGS.max_paragraph_size
 
         V = tf.get_variable("V", [l,2*l], initializer=tf.contrib.layers.xavier_initializer())   #Use xavier initialization for weights, zeros for biases
         Wa = tf.get_variable("Wa", [l,l], initializer=tf.contrib.layers.xavier_initializer())
@@ -154,30 +149,23 @@ class Decoder(object):
         c = tf.Variable(tf.zeros([1]), name = "c")
 
         Hr = knowledge_rep
-        Hr_tilda = tf.concat([ Hr, tf.zeros([ 1, tf.shape(Hr_tilda)[1] ]) ], axis = 0)
+        Hr_tilda = tf.concat([ Hr, tf.zeros([2*l, 1]) ], axis = 1)    #Append an additional column
 
         cell = tf.contrib.rnn.BasicLSTMCell(l) #self.size passed in through initialization from "state_size" flag
 
-        B_k_1 = None
-        B_k_2 = None
+        B = [None, None]
         state = cell.zero_state()
-        for i in xrange(0, 2):
-            # just two iterations for the start point and end point
-            term2 = Wa*state + ba  # should be an l dimensional vec
-            eq = tf.ones()
-            term2 = #term2.broadcast across passage length to end up with an l x passage_length matrix where every column is the same
-            F_k = tf.tanh(tf.matmul(V,Hr_tilda) + term2)
-            B_k_term1 = tf.matmul(v.T, F_k)
-            #B_k_term2 = #c.broadcast across passage length to end up with a 1 x passage_length matrix where every element is the same
-            if i == 0:
-                B_k_1 = tf.softmax(B_k_term1 + B_k_term2)
-                _, state = cell.step(tf.matmul(knowledge_rep,B_k_1.T))  
-            else:
-                B_k_2 = tf.softmax(B_k_term1 + B_k_term2)
-                _, state = cell.step(tf.matmul(knowledge_rep,B_k_2.T))
+        for i, _ in enumerate(B):  # just two iterations for the start point and end point
+            # Fk calculation
+            Whb = Wa*state + ba  # should be an l dimensional vec
+            eP = tf.ones([1, P+1]) 
+            Fk = tf.tanh(tf.matmul(V,Hr_tilda) + tf.matmul(tf.transpose(Whb), eP))  #Replicate Whb P+1 times
+            
+            # Bs and Be calculation
+            B[i] = tf.softmax(tf.matmul(tf.transpose(v), Fk) + tf.matmul(tf.transpose(c), eP))     #Replicate c P+1 times
+            _, state = cell.step(tf.matmul(knowledge_rep, tf.transpose(B[i])))  
 
-
-        return ([0.0]*300,[0.0]*300)
+        return tuple(B) # Bs, Be
 
 
 class QASystem(object):
@@ -248,6 +236,10 @@ class QASystem(object):
         Set up your loss computation here
         :return:
         """
+        # This is what we need to use to calculate the loss function they give us,
+        # and importantly, it's already softmax'd. The loss will need to be changed
+        # to be -log(Beta_1_i * Beta_2_j) where i is the actual start token, and j is the actual end token.
+
         with vs.variable_scope("loss"):
             p = self.Beta_s[:,self.start_answer_placeholder] * self.Beta_e[:,self.end_answer_placeholder]   #First column is for batches?
             self.loss = -tf.reduce_sum(tf.log(p))
