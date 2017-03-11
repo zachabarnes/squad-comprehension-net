@@ -65,8 +65,6 @@ class Encoder(object):
         input_question = tf.expand_dims(input_question, axis = 0)
         input_paragraph = tf.expand_dims(input_paragraph, axis = 0)
 
-        print (input_question.get_shape().as_list())
-
         with tf.variable_scope("question_encode"):
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.size) #self.size passed in through initialization from "state_size" flag
             HQ, _ = tf.nn.dynamic_rnn(cell, tf.transpose(input_question,[0,2,1]), dtype = tf.float32)
@@ -91,30 +89,54 @@ class Encoder(object):
 
         HQ = tf.squeeze(HQ)
         HP = tf.squeeze(HP)
-        print (HQ.get_shape().as_list())
 
         term_1 = tf.matmul(WQ, HQ)
-
         HPs = tf.unstack(HP, axis = 1)
 
-        cell = tf.nn.rnn_cell.BasicLSTMCell(200, state_is_tuple=False)
-        hr = cell.zero_state(1,tf.float32)
-        print(hr)
-        hrs = []
-        for i, hp_i in enumerate(HPs):
-            hp_i = tf.expand_dims(hp_i, axis=1)
-            #hr = tf.expand_dims(hr, axis=1)
-            term2 = tf.matmul(WP,hp_i) + tf.matmul(WR,hr) +bP
-            eQ = tf.ones([1, Q]) 
-            G_i = tf.matmul(term2, eQ)
-            print(tf.matmul(b,eQ))
-            a_i = tf.nn.softmax(tf.matmul(tf.transpose(w),G_i) + b*eQ)
-            #print(a_i)
+        with tf.variable_scope("right_match_LSTM"):
+            cell_r = tf.nn.rnn_cell.BasicLSTMCell(self.size)
+            cell_state = cell_r.zero_state(self.FLAGS.batch_size,tf.float32)
+            hr = tf.transpose(cell_state[1])
+            hrs = []
+            for i, hp_i in enumerate(HPs):
+                if i > 0:
+                    tf.get_variable_scope().reuse_variables()
+                hp_i = tf.expand_dims(hp_i, axis=1)
+                term2 = tf.matmul(WP,hp_i) + tf.matmul(WR,hr) +bP
+                eQ = tf.ones([1, Q]) 
+                G_i = tf.matmul(term2, eQ)
+                a_i = tf.nn.softmax(tf.matmul(tf.transpose(w),G_i) + b*eQ)
 
-            z_i = tf.concat_v2([hp_i, tf.matmul(HQ,tf.transpose(a_i))],0)
-            hr, _ = cell(z_i, hr)
-            hrs.append(hr)
+                attn = tf.matmul(HQ,tf.transpose(a_i))
+                z_i = tf.concat(0,[hp_i, attn])
+                hr, cell_state = cell_r(tf.transpose(z_i), cell_state)
+                hr = tf.transpose(hr)
+                hrs.append(hr)
+            HR_right = tf.concat(1,hrs)
 
+        with tf.variable_scope("left_match_LSTM"):
+            cell_l = tf.nn.rnn_cell.BasicLSTMCell(self.size)
+            cell_state = cell_l.zero_state(self.FLAGS.batch_size,tf.float32)
+            hr = tf.transpose(cell_state[1])
+            hrs = []
+            for i, hp_i in enumerate(reversed(HPs)):
+                if i > 0:
+                    tf.get_variable_scope().reuse_variables()
+                hp_i = tf.expand_dims(hp_i, axis=1)
+                term2 = tf.matmul(WP,hp_i) + tf.matmul(WR,hr) +bP
+                eQ = tf.ones([1, Q]) 
+                G_i = tf.matmul(term2, eQ)
+                a_i = tf.nn.softmax(tf.matmul(tf.transpose(w),G_i) + b*eQ)
+
+                attn = tf.matmul(HQ,tf.transpose(a_i))
+                z_i = tf.concat(0,[hp_i, attn])
+                hr, cell_state = cell_l(tf.transpose(z_i), cell_state)
+                hr = tf.transpose(hr)
+                hrs.append(hr)
+            HR_left = tf.concat(1,hrs)
+        
+        HR = tf.concat(0,[HR_right,HR_left])
+        print(HR)
 
         ### Calculate everything we just did but backwards (should be pretty much the same code)
         ### Doesn't initialize new variables because they are reused
@@ -124,7 +146,7 @@ class Encoder(object):
         ### Return H^R (Or multiple H^R if handling batching)
 
         #Encode paragraphs
-        return inputs
+        return HR
 
 class Decoder(object):
     def __init__(self, output_size, FLAGS):
