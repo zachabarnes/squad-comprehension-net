@@ -54,13 +54,18 @@ class Encoder(object):
         """
         question_shape = input_question.get_shape().as_list()
         paragraph_shape = input_paragraph.get_shape().as_list()
-        assert question_shape == [None, self.FLAGS.embedding_size, self.FLAGS.max_question_size]
-        assert paragraph_shape == [None, self.FLAGS.embedding_size, self.FLAGS.max_paragraph_size]
+        assert question_shape == [self.FLAGS.embedding_size, self.FLAGS.max_question_size]
+        assert paragraph_shape == [self.FLAGS.embedding_size, self.FLAGS.max_paragraph_size]
 
 
         ### Right now the way we set everything up, the first dimension of each input is arbitrary
         ### If we don't want to handle batching for now, I'm not exactly what to change but I think
         ### it can be traced back to self.paragraph_placeholder
+
+        input_question = tf.expand_dims(input_question, axis = 0)
+        input_paragraph = tf.expand_dims(input_paragraph, axis = 0)
+
+        print (input_question.get_shape().as_list())
 
         with tf.variable_scope("question_encode"):
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.size) #self.size passed in through initialization from "state_size" flag
@@ -80,15 +85,35 @@ class Encoder(object):
         WQ = tf.get_variable("WQ", [l,l], initializer=tf.contrib.layers.xavier_initializer())
         WP = tf.get_variable("WB", [l,l], initializer=tf.contrib.layers.xavier_initializer())
         WR = tf.get_variable("WR", [l,l], initializer=tf.contrib.layers.xavier_initializer())
-        bP = tf.Variable(tf.zeros([self.size])) #l (aka self.size)
-        w = tf.Variable(tf.zeros([self.size])) #l (aka self.size)
+        bP = tf.Variable(tf.zeros([self.size,1])) #l (aka self.size)
+        w = tf.Variable(tf.zeros([self.size,1])) #l (aka self.size)
+        b = tf.Variable(tf.zeros([1,1]))
 
+        HQ = tf.squeeze(HQ)
+        HP = tf.squeeze(HP)
         print (HQ.get_shape().as_list())
-        HQ_shaped = tf.reshape(HQ, [-1, l])
-        term_1 = tf.matmul(HQ_shaped,WQ)
-        term_1 = tf.reshape(term_1, [-1, Q, l])
-        term_1 = tf.transpose(term_1, [0,2,1])
-        print(term_1)
+
+        term_1 = tf.matmul(WQ, HQ)
+
+        HPs = tf.unstack(HP, axis = 1)
+
+        cell = tf.nn.rnn_cell.BasicLSTMCell(200, state_is_tuple=False)
+        hr = cell.zero_state(1,tf.float32)
+        print(hr)
+        hrs = []
+        for i, hp_i in enumerate(HPs):
+            hp_i = tf.expand_dims(hp_i, axis=1)
+            #hr = tf.expand_dims(hr, axis=1)
+            term2 = tf.matmul(WP,hp_i) + tf.matmul(WR,hr) +bP
+            eQ = tf.ones([1, Q]) 
+            G_i = tf.matmul(term2, eQ)
+            print(tf.matmul(b,eQ))
+            a_i = tf.nn.softmax(tf.matmul(tf.transpose(w),G_i) + b*eQ)
+            #print(a_i)
+
+            z_i = tf.concat_v2([hp_i, tf.matmul(HQ,tf.transpose(a_i))],0)
+            hr, _ = cell(z_i, hr)
+            hrs.append(hr)
 
 
         ### Calculate everything we just did but backwards (should be pretty much the same code)
@@ -137,7 +162,7 @@ class Decoder(object):
         for i, _ in enumerate(B):  # just two iterations for the start point and end point
             # Fk calculation
             Whb = Wa*state + ba  # should be an l dimensional vec
-            eP = tf.ones([1, P+1]) 
+            eP = tf.ones([1, P]) 
             Fk = tf.tanh(tf.matmul(V,Hr) + tf.matmul(tf.transpose(Whb), eP))  #Replicate Whb P+1 times
             
             # Bs and Be calculation
@@ -164,12 +189,20 @@ class QASystem(object):
         self.learning_rate = tf.Variable(float(self.FLAGS.learning_rate), trainable = False, name = "learning_rate")
         self.global_step = tf.Variable(int(0), trainable = True, name = "global_step")
 
-        # ==== set up placeholder tokens ========
-        self.paragraph_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
-        self.question_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_question_size), name="question_placeholder")
-        self.start_answer_placeholder = tf.placeholder(tf.int32, (None), name="start_answer_placeholder")
-        self.end_answer_placeholder = tf.placeholder(tf.int32, (None), name="end_answer_placeholder")
-        self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (None, self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
+        # # ==== set up placeholder tokens ========
+        # self.paragraph_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
+        # self.question_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_question_size), name="question_placeholder")
+        # self.start_answer_placeholder = tf.placeholder(tf.int32, (None), name="start_answer_placeholder")
+        # self.end_answer_placeholder = tf.placeholder(tf.int32, (None), name="end_answer_placeholder")
+        # self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (None, self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
+        # self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
+
+  # ==== set up placeholder tokens ======== 2d
+        self.paragraph_placeholder = tf.placeholder(tf.int32, (self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
+        self.question_placeholder = tf.placeholder(tf.int32, (self.FLAGS.max_question_size), name="question_placeholder")
+        self.start_answer_placeholder = tf.placeholder(tf.int32, (), name="start_answer_placeholder")
+        self.end_answer_placeholder = tf.placeholder(tf.int32, (), name="end_answer_placeholder")
+        self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
         self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
         # ==== assemble pieces ====
@@ -233,8 +266,8 @@ class QASystem(object):
             pretrained_embeddings = embed_file['glove']
             embeddings = tf.Variable(pretrained_embeddings, name = "embeddings")
             embeddings = tf.cast(embeddings, tf.float32)
-            self.paragraph_embedding = tf.transpose(tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder), [0,2,1])
-            self.question_embedding = tf.transpose(tf.nn.embedding_lookup(embeddings,self.question_placeholder), [0,2,1])
+            self.paragraph_embedding = tf.transpose(tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder), [1,0])
+            self.question_embedding = tf.transpose(tf.nn.embedding_lookup(embeddings,self.question_placeholder), [1,0])
 
     def decode(self, session, question, paragraph):
         """
