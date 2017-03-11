@@ -18,6 +18,7 @@ from qa_model import Encoder, QASystem, Decoder
 from preprocessing.squad_preprocess import data_from_json, maybe_download, squad_base_url, \
     invert_map, tokenize, token_idx_map
 import qa_data
+from utils import get_dataset, initialize_model, initialize_vocab, get_normalized_train_dir
 
 import logging
 
@@ -38,31 +39,8 @@ tf.app.flags.DEFINE_string("log_dir", "log", "Path to store log and flag files (
 tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab file (default: ./data/squad/vocab.dat)")
 tf.app.flags.DEFINE_string("embed_path", "", "Path to the trimmed GLoVe embedding (default: ./data/squad/glove.trimmed.{embedding_size}.npz)")
 tf.app.flags.DEFINE_string("dev_path", "data/squad/dev-v1.1.json", "Path to the JSON dev set to evaluate against (default: ./data/squad/dev-v1.1.json)")
-
-def initialize_model(session, model, train_dir):
-    ckpt = tf.train.get_checkpoint_state(train_dir)
-    v2_path = ckpt.model_checkpoint_path + ".index" if ckpt else ""
-    if ckpt and (tf.gfile.Exists(ckpt.model_checkpoint_path) or tf.gfile.Exists(v2_path)):
-        logging.info("Reading model parameters from %s" % ckpt.model_checkpoint_path)
-        model.saver.restore(session, ckpt.model_checkpoint_path)
-    else:
-        logging.info("Created model with fresh parameters.")
-        session.run(tf.global_variables_initializer())
-        logging.info('Num params: %d' % sum(v.get_shape().num_elements() for v in tf.trainable_variables()))
-    return model
-
-
-def initialize_vocab(vocab_path):
-    if tf.gfile.Exists(vocab_path):
-        rev_vocab = []
-        with tf.gfile.GFile(vocab_path, mode="rb") as f:
-            rev_vocab.extend(f.readlines())
-        rev_vocab = [line.strip('\n') for line in rev_vocab]
-        vocab = dict([(x, y) for (y, x) in enumerate(rev_vocab)])
-        return vocab, rev_vocab
-    else:
-        raise ValueError("Vocabulary file %s not found.", vocab_path)
-
+tf.app.flags.DEFINE_integer("max_paragraph_size", 300, "The length to cut paragraphs off at")   # As per Frank's histogram
+tf.app.flags.DEFINE_integer("max_question_size", 20, "The length to cut question off at")   # As per Frank's histogram
 
 def read_dataset(dataset, tier, vocab):
     """Reads the dataset, extracts context, question, answer,
@@ -129,25 +107,19 @@ def generate_answers(sess, model, dataset, rev_vocab):
     :param rev_vocab: this is a list of vocabulary that maps index to actual words
     :return:
     """
+    unified_dataset = zip(dataset["val_questions"], dataset["val_context"], dataset["val_question_uuids"])
     answers = {}
 
+    for question, context, uuid in unified_dataset:
+        token_answer = model.answer(sess, question, context)
+        answer = []
+        for token in token_answer:
+            word = rev_vocab[token]
+            sentence.append(word)
+        answer = ' '.join(word for word in sentence)
+        answers[uuid] = answer
+
     return answers
-
-
-def get_normalized_train_dir(train_dir):
-    """
-    Adds symlink to {train_dir} from /tmp/cs224n-squad-train to canonicalize the
-    file paths saved in the checkpoint. This allows the model to be reloaded even
-    if the location of the checkpoint files has moved, allowing usage with CodaLab.
-    This must be done on both train.py and qa_answer.py in order to work.
-    """
-    global_train_dir = '/tmp/cs224n-squad-train'
-    if os.path.exists(global_train_dir):
-        os.unlink(global_train_dir)
-    if not os.path.exists(train_dir):
-        os.makedirs(train_dir)
-    os.symlink(os.path.abspath(train_dir), global_train_dir)
-    return global_train_dir
 
 
 def main(_):
@@ -171,7 +143,7 @@ def main(_):
     dev_dirname = os.path.dirname(os.path.abspath(FLAGS.dev_path))
     dev_filename = os.path.basename(FLAGS.dev_path)
     context_data, question_data, question_uuid_data = prepare_dev(dev_dirname, dev_filename, vocab)
-    dataset = (context_data, question_data, question_uuid_data)
+    dataset = {"val_context": context_data, "val_questions": question_data, "val_question_uuids": question_uuid_data}
 
     # ========= Model-specific =========
     # You must change the following code to adjust to your model
