@@ -7,6 +7,7 @@ import logging
 import os
 import copy
 import random
+import sys
 from datetime import datetime
 
 import numpy as np
@@ -440,10 +441,13 @@ class QASystem(object):
                 (q, q_mask, p, p_mask, span) = random.choice(train_data)
                 loss = self.optimize(session, q, q_mask, p, p_mask, span)
                 losses.append(loss)
-                if i % 100 == 0 and i != 0:
+                if i % 100 == 0 or i == 0 or i==num_data:
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
-                    print("EPOCH %d: %d/%d".format(cur_epoch,i,num_data))
-                    print("Loss: %s" % mean_loss)
+                    num_complete = int(20*float(i)/num_data)
+                    sys.stdout.write('\r')
+                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d)" % (cur_epoch, mean_loss,'='*num_complete, i, num_data))
+                    sys.stdout.flush()
+            sys.stdout.write('\n')
 
             self.evaluate_answer(session, dataset, rev_vocab, sample=100, log=True)
 
