@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import time
 import logging
+import os
 
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
@@ -127,18 +128,6 @@ class Decoder(object):
         :return:
         """
 
-        # We need to calculate equations 7 and 8 from the paper to get Beta_k variables
-        # I imagine this code will look similar to the encoding part where we had to 
-        # do equation 2 from the paper.
-
-        # Beta_k will be a P length vector, storing a probability for each word (basically
-        # will this word be the start word)
-
-
-        # I think we just need two Beta_k's, one for start and one for end. If
-        # we just return these as our predictions that should be the end of this function.
-
-
         l = self.FLAGS.state_size
         P = self.FLAGS.max_paragraph_size
 
@@ -148,7 +137,7 @@ class Decoder(object):
         v = tf.Variable(tf.zeros([l]), name = "v")
         c = tf.Variable(tf.zeros([1]), name = "c")
 
-        Hr = knowledge_rep
+        Hr = knowledge_rep  #The first (0th) dimension of this will be of size batch_size
 
         cell = tf.nn.BasicLSTMCell(l) #self.size passed in through initialization from "state_size" flag
 
@@ -181,8 +170,8 @@ class QASystem(object):
         self.FLAGS = FLAGS
 
         # ==== set up variables ========
-        self.learning_rate = tf.Variable(float(self.FLAGS.learning_rate), trainable = False)
-        self.global_step = tf.Variable(int(0), trainable = True)
+        self.learning_rate = tf.Variable(float(self.FLAGS.learning_rate), trainable = False, name = "learning_rate")
+        self.global_step = tf.Variable(int(0), trainable = True, name = "global_step")
 
         # ==== set up placeholder tokens ========
         self.paragraph_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
@@ -255,69 +244,30 @@ class QASystem(object):
             self.paragraph_embedding = tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder)
             self.question_embedding = tf.nn.embedding_lookup(embeddings,self.question_placeholder)
 
-    '''
-    def test(self, session, valid_x, valid_y):
-        """
-        in here you should compute a cost for your validation set
-        and tune your hyperparameters according to the validation set performance
-        :return:
-        """
-        input_feed = {}
-
-        # fill in this feed_dictionary like:
-        # input_feed['valid_x'] = valid_x
-
-        output_feed = []
-
-        outputs = session.run(output_feed, input_feed)
-
-        return outputs
-
-    def decode(self, session, test_x):
+    def decode(self, session, question, paragraph):
         """
         Returns the probability distribution over different positions in the paragraph
         so that other methods like self.answer() will be able to work properly
         :return:
         """
         input_feed = {}
+        input_feed['question_placeholder'] = self.question_placeholder
+        input_feed['paragraph_placeholder'] = self.paragraph_placeholder
 
-        # fill in this feed_dictionary like:
-        # input_feed['test_x'] = test_x
-
-        output_feed = []
+        output_feed = [self.Beta_s, self.Beta_e]
 
         outputs = session.run(output_feed, input_feed)
 
         return outputs
 
-    def answer(self, session, test_x):
+    def answer(self, session, question, paragraph):
 
-        yp, yp2 = self.decode(session, test_x)
+        B_s, B_e = self.decode(session, question, paragraph)
 
-        a_s = np.argmax(yp, axis=1)
-        a_e = np.argmax(yp2, axis=1)
+        a_s = np.argmax(B_s, axis=1)
+        a_e = np.argmax(B_e, axis=1)
 
-        return (a_s, a_e)
-
-    def validate(self, sess, valid_dataset):
-        """
-        Iterate through the validation dataset and determine what
-        the validation cost is.
-
-        This method calls self.test() which explicitly calculates validation cost.
-
-        How you implement this function is dependent on how you design
-        your data iteration function
-
-        :return:
-        """
-        valid_cost = 0
-
-        for valid_x, valid_y in valid_dataset:
-          valid_cost = self.test(sess, valid_x, valid_y)
-
-
-        return valid_cost
+        return a_s, a_e
 
     def evaluate_answer(self, session, dataset, sample=100, log=False):
         """
@@ -335,25 +285,25 @@ class QASystem(object):
         :return:
         """
 
-        # TODO: Look at evaluate function from evaluate.py
-        f1_list = []
-        em_list = []
+        f1_list, em_list = [], []
+        temp_dataset = zip(dataset["val_questions"], dataset["val_context"], dataset["val_span"])
         subdataset = random.sample(dataset, sample)
-        for (q,p,a) in subdataset:
-            a_s,a_e = self.answer(session,(q,p))
-            answer = p[a_s, a_e + 1]
-            true_answer = p[true_s, true_e + 1]
-            f1_list.append(f1_score(answer, true_answer))
-            em_list.append(exact_match_score(answer, true_answer))
+        for question, paragraph, answer in subdataset:
+            a_s,a_e = self.answer(session,question,paragraph)
+            true_s, true_e = answer[0], answer[1]
+            our_answer = p[a_s : a_e + 1]           #The slice of the context paragraph that is our answer
+            true_answer = p[true_s : true_e + 1]    #The slice of the context paragraph that is the true answer
+            f1_list.append(f1_score(our_answer, true_answer))
+            em_list.append(exact_match_score(our_answer, true_answer))
 
-        f1 = sum(f1_list)/float(len(f1_list) + 10**(-5))
-        em = sum(em_list)/float(len(em_list) + 10**(-5))
+        f1 = sum(f1_list)/float(len(f1_list))
+        em = sum(em_list)/float(len(em_list))
 
         if log:
             logging.info("F1: {}, EM: {}, for {} samples".format(f1, em, sample))
 
         return f1, em
-    '''
+    
 
     def optimize(self, session, train_q, train_q_mask, train_p, train_p_mask, train_span):
         """
@@ -378,9 +328,9 @@ class QASystem(object):
         output_feed.append(self.train_op)
         output_feed.append(self.loss)
 
-        outputs = session.run(output_feed, input_feed)
+        _, loss = session.run(output_feed, input_feed)
 
-        return outputs
+        return loss
 
     def train(self, session, dataset, train_dir):
         """
@@ -408,11 +358,6 @@ class QASystem(object):
 
         # some free code to print out number of parameters in your model
         # it's always good to check!
-        # you will also want to save your model parameters in train_dir
-        # so that you can use your trained model to make predictions, or
-        # even continue training
-
-
 
         tic = time.time()
         params = tf.trainable_variables()
@@ -420,15 +365,29 @@ class QASystem(object):
         toc = time.time()
         logging.info("Number of params: %d (retreival took %f secs)" % (num_params, toc - tic))
 
+        #Info for saving models
+        saver = tf.train.Saver()
+        start_time = "{:%d/%m/%Y_%H:%M:%S}".format(datetime.now())
+        model_name = "match-lstm"
+
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"])
         for cur_epoch in range(self.FLAGS.epochs):
-            for _ in range(train_data):
+            losses = []
+            for i in range(train_data):
+
                 (q, q_mask, p, p_mask, a) = random.choice(train_data)
 
-                outputs = self.optimize(session, )
+                loss = self.optimize(session, )
+                losses.append(loss)
+                if i % 100 == 0 and i != 0:
+                    mean_loss = sum(losses)/(len(losses) + 10**-7)
+                    print("Loss: %s" % mean_loss)
 
+            self.evaluate_answer(session, dataset, sample=100, log=True)
 
-        # For 10 Epochs
-        #   Train on Epoch
-        #   Evaluate
-        #   Save Parameters
+            #Save model after each epoch
+            checkpoint_path = os.path.join(train_dir, model_name, start_time,"model.ckpt")
+            if not os.path.exists(checkpoint_path):
+                os.makedirs(checkpoint_path)
+            save_path = saver.save(sess,  checkpoint_path)
+            print("Model saved in file: %s" % save_path)

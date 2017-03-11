@@ -37,6 +37,7 @@ tf.app.flags.DEFINE_integer("max_question_size", 20, "The length to cut question
 FLAGS = tf.app.flags.FLAGS
 
 
+#Restores checkpoints, or 
 def initialize_model(session, model, train_dir):
     ckpt = tf.train.get_checkpoint_state(train_dir)
     v2_path = ckpt.model_checkpoint_path + ".index" if ckpt else ""
@@ -44,6 +45,7 @@ def initialize_model(session, model, train_dir):
         logging.info("Reading model parameters from %s" % ckpt.model_checkpoint_path)
         model.saver.restore(session, ckpt.model_checkpoint_path)
     else:
+        logging.info("No checkpoints found in " + train_dir)
         logging.info("Created model with fresh parameters.")
         session.run(tf.global_variables_initializer())
         logging.info('Num params: %d' % sum(v.get_shape().num_elements() for v in tf.trainable_variables()))
@@ -114,17 +116,6 @@ def pad_inputs(data, max_length):
     return padded_data, mask_data
 
 def get_dataset():
-    '''
-    Dataset will have a list with the following order:
-    train question ids
-    train context ids
-    train answers
-    train span
-    val question ids
-    val context ids
-    val answer
-    val span
-    '''
 
     train_questions_path = os.path.join(FLAGS.data_dir, "train.ids.question")
     train_answer_path = os.path.join(FLAGS.data_dir, "train.answer")

@@ -41,7 +41,7 @@ def basic_tokenizer(sentence):
     words = []
     for space_separated_fragment in sentence.strip().split():
         words.extend(re.split(" ", space_separated_fragment))
-    return [w for w in words if w]
+    return [w.lower() for w in words if w]
 
 
 def initialize_vocabulary(vocabulary_path):
