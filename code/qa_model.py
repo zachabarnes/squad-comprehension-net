@@ -149,9 +149,8 @@ class Decoder(object):
         c = tf.Variable(tf.zeros([1]), name = "c")
 
         Hr = knowledge_rep
-        Hr_tilda = tf.concat([ Hr, tf.zeros([2*l, 1]) ], axis = 1)    #Append an additional column
 
-        cell = tf.contrib.rnn.BasicLSTMCell(l) #self.size passed in through initialization from "state_size" flag
+        cell = tf.nn.BasicLSTMCell(l) #self.size passed in through initialization from "state_size" flag
 
         B = [None, None]
         state = cell.zero_state()
@@ -159,7 +158,7 @@ class Decoder(object):
             # Fk calculation
             Whb = Wa*state + ba  # should be an l dimensional vec
             eP = tf.ones([1, P+1]) 
-            Fk = tf.tanh(tf.matmul(V,Hr_tilda) + tf.matmul(tf.transpose(Whb), eP))  #Replicate Whb P+1 times
+            Fk = tf.tanh(tf.matmul(V,Hr) + tf.matmul(tf.transpose(Whb), eP))  #Replicate Whb P+1 times
             
             # Bs and Be calculation
             B[i] = tf.softmax(tf.matmul(tf.transpose(v), Fk) + tf.matmul(tf.transpose(c), eP))     #Replicate c P+1 times
