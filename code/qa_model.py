@@ -102,7 +102,63 @@ class MatchLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
         hr, state = super(MatchLSTMCell, self).__call__(z_i, state)
         return hr, state
 
+# class DecodeLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
+#     """
+#     Extension of LSTM cell to do decoding and magic. Designed to be fed to dynammic_rnn
+#     """
+#     def __init__(self, hidden_size, HR, mats, vecs, FLAGS):
+#         self.HR = HR
+#         self.hidden_size = hidden_size
+#         self.FLAGS = FLAGS
+#         self.mats = mats
+#         self.vecs = vecs
+#         super(DecodeLSTMCell, self).__init__(hidden_size)
 
+#     def __call__(self, inputs, state, scope = None):
+#         """
+#         inputs: a batch representation (HP at each word i) that is inputs = hp_i and are [None, l]
+#         state: a current state for our cell which is LSTM so its a tuple of (c_mem, h_state), both are [None, l]
+#         """
+        
+#         #For naming convention load in from self the params and rename
+#         V, Wa = self.mats
+#         ba, v, c = self.vecs
+#         l, P, Q = self.hidden_size, self.FLAGS.max_paragraph_size, self.FLAGS.max_question_size
+#         Hr = self.HR
+#         hk = state[1]
+
+#         # Check correct input dimensions
+#         assert hk.get_shape().as_list() == [None, l] 
+#         assert inputs.get_shape().as_list() == [None, 1] 
+
+#         term2 = tf.matmul(hk,Wa) + ba 
+#         term2 = tf.transpose(tf.stack([term2 for _ in range(P)]), [1,0,2]) 
+#         assert term2.get_shape().as_list() == [None, P, l] 
+        
+#         Hr_shaped = tf.reshape(Hr, [-1, 2*l])
+#         term1 = tf.matmul(Hr_shaped, V)
+#         term1 = tf.reshape(term1, [-1, P, l])
+#         assert term1.get_shape().as_list() == [None, P, l] 
+
+#         Fk = tf.tanh(term1 + term2)
+#         assert Fk.get_shape().as_list() == [None, P, l] 
+
+#         Fk_shaped = tf.reshape(Fk, [-1, l])
+#         beta_term = tf.matmul(Fk_shaped, v) + c
+#         beta_term = tf.reshape(beta_term ,[-1, P, 1])
+#         assert beta_term.get_shape().as_list() == [None, P, 1] 
+
+#         beta = tf.nn.softmax(beta_term)
+#         assert beta.get_shape().as_list() == [None, P, 1] 
+
+#         Hr_shaped_cell = tf.transpose(Hr, [0, 2, 1])
+#         cell_input = tf.squeeze(tf.batch_matmul(Hr_shaped_cell, beta), [2])
+#         assert cell_input.get_shape().as_list() == [None, 2*l] 
+
+#         hk, state = super(DecodeLSTMCell, self).__call__(cell_input, state)
+
+#         beta_return = tf.squeeze(beta [2])
+#         return hk, state
 
 class Encoder(object):
     def __init__(self, size, vocab_dim, FLAGS):
@@ -169,53 +225,69 @@ class Decoder(object):
         self.output_size = output_size
         self.FLAGS = FLAGS
 
-    def decode(self, knowledge_rep, paragraph_mask):    # Answer Pointer Layer
+    def decode(self, knowledge_rep, paragraph_mask): 
         """
-        takes in a knowledge representation
-        and output a probability estimation over
+        takes in a knowledge representation  and output a probability estimation over
         all paragraph tokens on which token should be
-        the start of the answer span, and which should be
-        the end of the answer span.
+        the start of the answer span, and which should be the end of the answer span.
 
         :param knowledge_rep: it is a representation of the paragraph and question,
                               decided by how you choose to implement the encoder
         :return:
         """
-        #paragraph_mask = tf.cast(paragraph_mask, tf.float32)
         l = self.FLAGS.state_size
         P = self.FLAGS.max_paragraph_size
 
         Hr = knowledge_rep  #The first (0th) dimension of this will be of size batch_size
 
-        assert HR.get_shape().as_list() == [None, P, 2*l]
-        assert paragraph_mask.get_shape().as_list() == [None, self.FLAGS.max_paragraph_size]
+        assert Hr.get_shape().as_list() == [None, P, 2*l]
+        assert paragraph_mask.get_shape().as_list() == [None, P]
 
         V = tf.get_variable("V", [2*l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))   #Use xavier initialization for weights, zeros for biases
         Wa = tf.get_variable("Wa", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
-        ba = tf.Variable(tf.zeros([l,1]), name = "ba")
+        ba = tf.Variable(tf.zeros([1,l]), name = "ba")
         v = tf.Variable(tf.zeros([l,1]), name = "v")
         c = tf.Variable(tf.zeros([1]), name = "c")
        
 
-        cell = tf.nn.rnn_cell.BasicLSTMCell(l) #self.size passed in through initialization from "state_size" flag
+        cell = tf.nn.rnn_cell.BasicLSTMCell(l)
 
         preds = [None, None]
-        cell_state = cell.zero_state(self.FLAGS.batch_size, tf.float32)
-        hk = tf.transpose(cell_state[1])
+        hk = Hr[:,:l,1]*0
+        cell_state = (hk, hk)
+        assert hk.get_shape().as_list() == [None, l] 
+
         for i, _ in enumerate(preds):  # just two iterations for the start point and end point
             if i > 0:
                 tf.get_variable_scope().reuse_variables()
-            Whb = tf.matmul(Wa,hk) + ba  # should be an l dimensional vec
-            eP = tf.ones([1, P]) 
-            Fk = tf.tanh(tf.matmul(V,Hr) + tf.matmul(Whb, eP))  #Replicate Whb P+1 times
-            
-            # Bs and Be calculation
-            pred = tf.matmul(tf.transpose(v), Fk) + c*eP       # Replicate c P+1 times
 
-            preds[i] = pred    #Softmax doen in loss function
-            cell_input = tf.matmul(Hr, tf.transpose(tf.nn.softmax(pred)))
-            hk, cell_state = cell(tf.transpose(cell_input), cell_state)
-            hk = tf.transpose(hk)
+            term2 = tf.matmul(hk,Wa) + ba 
+            term2 = tf.transpose(tf.stack([term2 for _ in range(P)]), [1,0,2]) 
+            assert term2.get_shape().as_list() == [None, P, l] 
+            
+            Hr_shaped = tf.reshape(Hr, [-1, 2*l])
+            term1 = tf.matmul(Hr_shaped, V)
+            term1 = tf.reshape(term1, [-1, P, l])
+            assert term1.get_shape().as_list() == [None, P, l] 
+
+            Fk = tf.tanh(term1 + term2)
+            assert Fk.get_shape().as_list() == [None, P, l] 
+
+            Fk_shaped = tf.reshape(Fk, [-1, l])
+            beta_term = tf.matmul(Fk_shaped, v) + c
+            beta_term = tf.reshape(beta_term ,[-1, P, 1])
+            assert beta_term.get_shape().as_list() == [None, P, 1] 
+
+            beta = tf.nn.softmax(beta_term)
+            assert beta.get_shape().as_list() == [None, P, 1] 
+
+            Hr_shaped_cell = tf.transpose(Hr, [0, 2, 1])
+            cell_input = tf.squeeze(tf.batch_matmul(Hr_shaped_cell, beta), [2])
+            assert cell_input.get_shape().as_list() == [None, 2*l] 
+
+            hk, cell_state = cell(cell_input, cell_state)
+
+            preds[i] = tf.squeeze(beta, [2])
 
         print("Beta_s Dims:" + str(preds[0].get_shape().as_list()))
         print("Beta_e Dims:" + str(preds[1].get_shape().as_list()))
