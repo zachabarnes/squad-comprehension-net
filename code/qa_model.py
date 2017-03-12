@@ -321,7 +321,7 @@ class QASystem(object):
         a_s = np.argmax(B_s, axis=1)
         a_e = np.argmax(B_e, axis=1)
 
-        return a_s, a_e
+        return a_s[0], a_e[0]
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
         """
@@ -344,7 +344,7 @@ class QASystem(object):
         our_answers = []
         for question, paragraph, true_answer in sample_dataset:
             a_s, a_e = self.answer(session, question, paragraph)
-            token_answer = paragraph[a_s : a_e + 1]           #The slice of the context paragraph that is our answer
+            token_answer = paragraph[a_s: a_e + 1]           #The slice of the context paragraph that is our answer
 
             sentence = []
             for token in token_answer:
@@ -357,6 +357,7 @@ class QASystem(object):
         answer_tuples = zip(dataset["val_answer"], our_answers)
         for ground_truth, prediction in answer_tuples:
             total += 1
+            print(prediction, ground_truth)
             exact_match += exact_match_score(prediction, ground_truth)
             f1 += f1_score(prediction, ground_truth)
 
@@ -463,7 +464,7 @@ class QASystem(object):
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
-            #self.evaluate_answer(session, dataset, rev_vocab, sample=100, log=True)
+            self.evaluate_answer(session, dataset, rev_vocab, sample=100, log=True)
 
             #Save model after each epoch
             checkpoint_path = os.path.join(train_dir, model_name, start_time,"model.ckpt")
