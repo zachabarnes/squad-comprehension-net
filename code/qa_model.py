@@ -580,7 +580,7 @@ class QASystem(object):
             losses = []
             for i in range(num_data):
                 #(q, q_mask, p, p_mask, span, answ) = random.choice(small_data)
-                batch = get_batch(small_data)
+                batch = self.get_batch(small_data)
                 #while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
                 #    (q, q_mask, p, p_mask, span) = random.choice(train_data)
 
