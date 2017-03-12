@@ -110,7 +110,7 @@ class Encoder(object):
                 hp_i = tf.expand_dims(hp_i, axis=1)
                 term2 = tf.matmul(WP,hp_i) + tf.matmul(WR,hr) +bP
                 eQ = tf.ones([1, Q]) 
-                G_i = tf.matmul(term2, eQ)
+                G_i = tf.nn.tanh(term1 + tf.matmul(term2, eQ))
                 a_i = tf.nn.softmax(tf.matmul(tf.transpose(w),G_i) + b*eQ)
 
                 attn = tf.matmul(HQ,tf.transpose(a_i))
@@ -133,7 +133,7 @@ class Encoder(object):
                 hp_i = tf.expand_dims(hp_i, axis=1)
                 term2 = tf.matmul(WP,hp_i) + tf.matmul(WR,hr) + bP
                 eQ = tf.ones([1, Q]) 
-                G_i = tf.matmul(term2, eQ)
+                G_i = tf.nn.tanh(term1 + tf.matmul(term2, eQ))
                 a_i = tf.nn.softmax(tf.matmul(tf.transpose(w),G_i) + b*eQ)
 
                 attn = tf.matmul(HQ,tf.transpose(a_i))
@@ -299,7 +299,7 @@ class QASystem(object):
             self.paragraph_embedding = tf.transpose(tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder), [1,0])
             self.question_embedding = tf.transpose(tf.nn.embedding_lookup(embeddings,self.question_placeholder), [1,0])
 
-    def decode(self, session, question, paragraph):
+    def decode(self, session, question, paragraph, question_mask, paragraph_mask):
         """
         Returns the probability distribution over different positions in the paragraph
         so that other methods like self.answer() will be able to work properly
@@ -308,6 +308,9 @@ class QASystem(object):
         input_feed = {}
         input_feed[self.question_placeholder] = np.array(question)
         input_feed[self.paragraph_placeholder] = np.array(paragraph)
+        input_feed[self.paragraph_mask_placeholder] = np.array(paragraph_mask).T
+        input_feed[self.paragraph_length] = np.reshape(np.sum(paragraph_mask),[-1])   # Sum and make into a list
+        input_feed[self.question_length] = np.reshape(np.sum(question_mask),[-1])    # Sum and make into a list
 
         output_feed = [self.Beta_s, self.Beta_e]
 
@@ -315,9 +318,9 @@ class QASystem(object):
 
         return outputs
 
-    def answer(self, session, question, paragraph):
+    def answer(self, session, question, paragraph, question_mask, paragraph_mask):
 
-        B_s, B_e = self.decode(session, question, paragraph)
+        B_s, B_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
 
         a_s = np.argmax(B_s, axis=1)
         a_e = np.argmax(B_e, axis=1)
@@ -343,8 +346,8 @@ class QASystem(object):
         #sample_dataset = random.sample(zip(dataset["val_questions"], dataset["val_context"], dataset["val_answer"]), sample)
         our_answers = []
         their_answers = []
-        for question, _, paragraph, _, span, true_answer in random.sample(dataset, sample):
-            a_s, a_e = self.answer(session, question, paragraph)
+        for question, question_mask, paragraph, paragraph_mask, span, true_answer in random.sample(dataset, sample):
+            a_s, a_e = self.answer(session, question, paragraph, question_mask, paragraph_mask)
             token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
             
             print(a_s, "\t", span[0])
