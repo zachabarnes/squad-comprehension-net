@@ -321,7 +321,7 @@ class QASystem(object):
         a_s = np.argmax(B_s, axis=1)
         a_e = np.argmax(B_e, axis=1)
 
-        return a_s[0], a_e[0], B_s, B_e
+        return a_s[0], a_e[0], B_s[0], B_e[0]
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
         """
@@ -455,7 +455,7 @@ class QASystem(object):
         for cur_epoch in range(self.FLAGS.epochs):
             losses = []
             for i in range(num_data):
-                #(q, q_mask, p, p_mask, span) = random.choice(train_data)
+                (q, q_mask, p, p_mask, span, answ) = random.choice(small_data)
                 #while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
                 #    (q, q_mask, p, p_mask, span) = random.choice(train_data)
 
