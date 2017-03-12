@@ -185,13 +185,17 @@ class Decoder(object):
         l = self.FLAGS.state_size
         P = self.FLAGS.max_paragraph_size
 
-        V = tf.get_variable("V", [l,2*l], initializer=tf.uniform_unit_scaling_initializer(1.0))   #Use xavier initialization for weights, zeros for biases
+        Hr = knowledge_rep  #The first (0th) dimension of this will be of size batch_size
+
+        assert HR.get_shape().as_list() == [None, P, 2*l]
+        assert paragraph_mask.get_shape().as_list() == [None, self.FLAGS.max_paragraph_size]
+
+        V = tf.get_variable("V", [2*l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))   #Use xavier initialization for weights, zeros for biases
         Wa = tf.get_variable("Wa", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
         ba = tf.Variable(tf.zeros([l,1]), name = "ba")
         v = tf.Variable(tf.zeros([l,1]), name = "v")
         c = tf.Variable(tf.zeros([1]), name = "c")
-
-        Hr = knowledge_rep  #The first (0th) dimension of this will be of size batch_size
+       
 
         cell = tf.nn.rnn_cell.BasicLSTMCell(l) #self.size passed in through initialization from "state_size" flag
 
@@ -284,7 +288,11 @@ class QASystem(object):
         :return:
         """
         Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length)
-        self.Beta_s, self.Beta_e = self.decoder.decode(Hr, self.paragraph_mask_placeholder)
+        ps, pe = self.decoder.decode(Hr, self.paragraph_mask_placeholder)
+        self.pred_s = tf.boolean_mask(ps[0,:], self.paragraph_mask_placeholder)     # For loss
+        self.pred_e = tf.boolean_mask(pe[0,:], self.paragraph_mask_placeholder)     # For loss
+        self.Beta_s = tf.nn.softmax(self.pred_s)   # For decode
+        self.Beta_e = tf.nn.softmax(self.pred_e)   # For decode
 
     def setup_loss(self):
         """
@@ -301,8 +309,8 @@ class QASystem(object):
         '''
         # I think that these losses are equivalent
         with vs.variable_scope("loss"):
-            l1 = sparse_softmax_cross_entropy_with_logits(tf.boolean_mask(self.Beta_s[0,:], self.paragraph_mask_placeholder), self.start_answer_placeholder)
-            l2 = sparse_softmax_cross_entropy_with_logits(tf.boolean_mask(self.Beta_e[0,:], self.paragraph_mask_placeholder), self.end_answer_placeholder)
+            l1 = sparse_softmax_cross_entropy_with_logits(self.pred_s, self.start_answer_placeholder)
+            l2 = sparse_softmax_cross_entropy_with_logits(self.pred_e, self.end_answer_placeholder)
             self.loss = l1 + l2
 
     def setup_embeddings(self):
@@ -330,7 +338,7 @@ class QASystem(object):
         input_feed[self.paragraph_length] = np.reshape(np.sum(paragraph_mask),[-1])   # Sum and make into a list
         input_feed[self.question_length] = np.reshape(np.sum(question_mask),[-1])    # Sum and make into a list
 
-        output_feed = [self.Beta_s, self.Beta_e]
+        output_feed = [self.Beta_s, self.Beta_e]    # Get the softmaxed outputs
 
         outputs = session.run(output_feed, input_feed)
 
