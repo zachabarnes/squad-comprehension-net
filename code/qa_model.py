@@ -338,11 +338,11 @@ class QASystem(object):
         :param log: whether we print to std out stream
         :return:
         """
-
-        sample_dataset = random.sample(zip(dataset["val_questions"], dataset["val_context"], dataset["val_answer"]), sample)
+        
+        #sample_dataset = random.sample(zip(dataset["val_questions"], dataset["val_context"], dataset["val_answer"]), sample)
         our_answers = []
         their_answers = []
-        for question, paragraph, true_answer in sample_dataset:
+        for question, _, paragraph, _, _, true_answer in dataset
             a_s, a_e = self.answer(session, question, paragraph)
             token_answer = paragraph[a_s: a_e + 1]      #The slice of the context paragraph that is our answer
 
@@ -436,14 +436,14 @@ class QASystem(object):
         start_time = "{:%d-%m-%Y_%H:%M:%S}".format(datetime.now())
         model_name = "match-lstm"
 
-        train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"])
+        train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
         #num_data = len(train_data)
-        num_data = 10
+        num_data = 100
         small_data = random.sample(train_data, num_data)
         for i, (q, q_mask, p, p_mask, span) in enumerate(small_data):
             while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
-                (q, q_mask, p, p_mask, span) = random.sample(train_data)
-                small_data[i] = (q, q_mask, p, p_mask, span)
+                (q, q_mask, p, p_mask, span, answ) = random.sample(train_data)
+                small_data[i] = (q, q_mask, p, p_mask, span, answ)
 
         for cur_epoch in range(self.FLAGS.epochs):
             losses = []
@@ -463,7 +463,7 @@ class QASystem(object):
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
-            self.evaluate_answer(session, dataset, rev_vocab, sample=100, log=True)
+            self.evaluate_answer(session, small_data, rev_vocab, sample=100, log=True)
 
             #Save model after each epoch
             checkpoint_path = os.path.join(train_dir, model_name, start_time,"model.ckpt")
