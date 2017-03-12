@@ -321,7 +321,7 @@ class QASystem(object):
         a_s = np.argmax(B_s, axis=1)
         a_e = np.argmax(B_e, axis=1)
 
-        return a_s[0], a_e, B_s, B_e
+        return a_s[0], a_e[0], B_s, B_e
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
         """
