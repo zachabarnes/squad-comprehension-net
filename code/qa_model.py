@@ -189,10 +189,10 @@ class Decoder(object):
             Fk = tf.tanh(tf.matmul(V,Hr) + tf.matmul(Whb, eP))  #Replicate Whb P+1 times
             
             # Bs and Be calculation
-            preds = tf.matmul(tf.transpose(v), Fk) + c*eP       # Replicate c P+1 times
+            pred = tf.matmul(tf.transpose(v), Fk) + c*eP       # Replicate c P+1 times
 
-            preds[i] = preds    #Softmax doen in loss function
-            cell_input = tf.matmul(Hr, tf.transpose(tf.nn.softmax(preds)))
+            preds[i] = pred    #Softmax doen in loss function
+            cell_input = tf.matmul(Hr, tf.transpose(tf.nn.softmax(pred)))
             hk, cell_state = cell(tf.transpose(cell_input), cell_state)
             hk = tf.transpose(hk)
 
