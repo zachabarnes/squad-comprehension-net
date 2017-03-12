@@ -321,7 +321,7 @@ class QASystem(object):
         a_s = np.argmax(B_s, axis=1)
         a_e = np.argmax(B_e, axis=1)
 
-        return a_s[0], a_e[0]
+        return a_s[0], a_e, B_s, B_e
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
         """
@@ -343,8 +343,8 @@ class QASystem(object):
         our_answers = []
         their_answers = []
         for question, _, paragraph, _, _, true_answer in dataset:
-            a_s, a_e = self.answer(session, question, paragraph)
-            token_answer = paragraph[a_s: a_e + 1]      #The slice of the context paragraph that is our answer
+            a_s, a_e, B_s, B_e = self.answer(session, question, paragraph)
+            token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
             
             print(a_s, a_e, token_answer)
 
@@ -443,7 +443,7 @@ class QASystem(object):
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
         #num_data = len(train_data)
-        num_data = 100
+        num_data = 10
         small_data = random.sample(train_data, num_data)
         for i, (q, q_mask, p, p_mask, span, answ) in enumerate(small_data):
             while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
