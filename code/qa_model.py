@@ -285,6 +285,7 @@ class QASystem(object):
             p = self.Beta_s[:,self.start_answer_placeholder] * self.Beta_e[:,self.end_answer_placeholder]   #First column is for batches?
             self.loss = -tf.reduce_sum(tf.log(p))
         '''
+        # I think that these losses are equivalent
         with vs.variable_scope("loss"):
             l1 = sparse_softmax_cross_entropy_with_logits(tf.boolean_mask(self.Beta_s[0,:], self.paragraph_mask_placeholder), self.start_answer_placeholder)
             l2 = sparse_softmax_cross_entropy_with_logits(tf.boolean_mask(self.Beta_e[0,:], self.paragraph_mask_placeholder), self.end_answer_placeholder)
@@ -449,7 +450,8 @@ class QASystem(object):
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
         #num_data = len(train_data)
-        num_data = 10
+        num_data = 10000
+
         small_data = random.sample(train_data, num_data)
         for i, (q, q_mask, p, p_mask, span, answ) in enumerate(small_data):
             while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
