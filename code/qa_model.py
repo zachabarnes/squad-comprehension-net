@@ -342,7 +342,7 @@ class QASystem(object):
         #sample_dataset = random.sample(zip(dataset["val_questions"], dataset["val_context"], dataset["val_answer"]), sample)
         our_answers = []
         their_answers = []
-        for question, _, paragraph, _, _, true_answer in dataset
+        for question, _, paragraph, _, _, true_answer in dataset:
             a_s, a_e = self.answer(session, question, paragraph)
             token_answer = paragraph[a_s: a_e + 1]      #The slice of the context paragraph that is our answer
 
@@ -440,7 +440,7 @@ class QASystem(object):
         #num_data = len(train_data)
         num_data = 100
         small_data = random.sample(train_data, num_data)
-        for i, (q, q_mask, p, p_mask, span) in enumerate(small_data):
+        for i, (q, q_mask, p, p_mask, span, answ) in enumerate(small_data):
             while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
                 (q, q_mask, p, p_mask, span, answ) = random.sample(train_data)
                 small_data[i] = (q, q_mask, p, p_mask, span, answ)
