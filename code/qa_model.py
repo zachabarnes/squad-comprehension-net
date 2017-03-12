@@ -458,7 +458,6 @@ class QASystem(object):
                 if i % self.FLAGS.print_every == 0 or i == 0 or i==num_data:
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     num_complete = int(20*float(i)/num_data)
-                    losses = []
                     sys.stdout.write('\r')
                     sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d)" % (cur_epoch, mean_loss,'='*num_complete, i, num_data))
                     sys.stdout.flush()
