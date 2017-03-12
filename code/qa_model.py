@@ -438,10 +438,10 @@ class QASystem(object):
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"])
         #num_data = len(train_data)
         num_data = 10
-        small_data = random.choice(train_data, num_data)
+        small_data = random.sample(train_data, num_data)
         for i, (q, q_mask, p, p_mask, span) in enumerate(small_data)
             while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
-                (q, q_mask, p, p_mask, span) = random.choice(train_data)
+                (q, q_mask, p, p_mask, span) = random.sample(train_data)
                 small_data[i] = (q, q_mask, p, p_mask, span)
 
         for cur_epoch in range(self.FLAGS.epochs):
