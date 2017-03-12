@@ -339,12 +339,12 @@ class QASystem(object):
         :return:
         """
 
-        temp_dataset = zip(dataset["val_questions"], dataset["val_context"], dataset["val_answer"])
-        sample_dataset = random.sample(temp_dataset, sample)
+        sample_dataset = random.sample(zip(dataset["val_questions"], dataset["val_context"], dataset["val_answer"]), sample)
         our_answers = []
+        their_answers = []
         for question, paragraph, true_answer in sample_dataset:
             a_s, a_e = self.answer(session, question, paragraph)
-            token_answer = paragraph[a_s: a_e + 1]           #The slice of the context paragraph that is our answer
+            token_answer = paragraph[a_s: a_e + 1]      #The slice of the context paragraph that is our answer
 
             sentence = []
             for token in token_answer:
@@ -352,9 +352,10 @@ class QASystem(object):
                 sentence.append(word)
 
             our_answers.append(' '.join(word for word in sentence))
+            their_answers.append(' '.join(word for word in true_answer))
 
         f1 = exact_match = total = 0
-        answer_tuples = zip(dataset["val_answer"], our_answers)
+        answer_tuples = zip(their_answers, our_answers)
         for ground_truth, prediction in answer_tuples:
             total += 1
             print(prediction, ground_truth)
