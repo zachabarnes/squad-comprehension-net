@@ -191,7 +191,7 @@ class Decoder(object):
             # Bs and Be calculation
             preds = tf.matmul(tf.transpose(v), Fk) + c*eP       # Replicate c P+1 times
 
-            preds[i] = pretrained_embeddings    #Softmax doen in loss function
+            preds[i] = preds    #Softmax doen in loss function
             cell_input = tf.matmul(Hr, tf.transpose(tf.nn.softmax(preds)))
             hk, cell_state = cell(tf.transpose(cell_input), cell_state)
             hk = tf.transpose(hk)
