@@ -483,12 +483,15 @@ class QASystem(object):
         return f1, exact_match
     
 
-    def optimize(self, session, train_q, train_q_mask, train_p, train_p_mask, train_span):
+    def optimize(self, session, batch):
         """
         Takes in actual data to optimize your model
         This method is equivalent to a step() function
         :return:
         """
+
+        print(zip(*batch))  # Unzip batch
+
         input_feed = {}
 
         start_ans = train_span[0]
@@ -512,6 +515,10 @@ class QASystem(object):
         _, loss = session.run(output_feed, input_feed)
 
         return loss
+
+    def get_batch(self, dataset):
+        random.sample(dataset, self.FLAGS.batch_size)
+
 
     def train(self, session, dataset, train_dir, rev_vocab):
         """
@@ -550,7 +557,7 @@ class QASystem(object):
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
         #num_data = len(train_data)
-        num_data = 1
+        num_data = 10
 
         small_data = random.sample(train_data, num_data)
         for i, (q, q_mask, p, p_mask, span, answ) in enumerate(small_data):
@@ -561,11 +568,12 @@ class QASystem(object):
         for cur_epoch in range(self.FLAGS.epochs):
             losses = []
             for i in range(num_data):
-                (q, q_mask, p, p_mask, span, answ) = random.choice(small_data)
+                #(q, q_mask, p, p_mask, span, answ) = random.choice(small_data)
+                batch = get_batch(small_data)
                 #while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
                 #    (q, q_mask, p, p_mask, span) = random.choice(train_data)
 
-                loss = self.optimize(session, q, q_mask, p, p_mask, span)
+                loss = self.optimize(session, batch)
                 losses.append(loss)
 
                 if i % self.FLAGS.print_every == 0 or i == 0 or i==num_data:
@@ -576,7 +584,7 @@ class QASystem(object):
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
-            self.evaluate_answer(session, small_data, rev_vocab, sample=1, log=True)
+            self.evaluate_answer(session, small_data, rev_vocab, sample=5, log=True)
 
             #Save model after each epoch
             checkpoint_path = os.path.join(train_dir, model_name, start_time,"model.ckpt")
