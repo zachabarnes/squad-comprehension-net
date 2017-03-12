@@ -235,58 +235,69 @@ class Decoder(object):
                               decided by how you choose to implement the encoder
         :return:
         """
+
+        # Decode Params
         l = self.FLAGS.state_size
         P = self.FLAGS.max_paragraph_size
+        Hr = knowledge_rep  
 
-        Hr = knowledge_rep  #The first (0th) dimension of this will be of size batch_size
-
-        assert Hr.get_shape().as_list() == [None, P, 2*l]
-        assert paragraph_mask.get_shape().as_list() == [None, P]
-
-        V = tf.get_variable("V", [2*l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))   #Use xavier initialization for weights, zeros for biases
+        # Decode variables
+        V = tf.get_variable("V", [2*l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))   
         Wa = tf.get_variable("Wa", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
         ba = tf.Variable(tf.zeros([1,l]), name = "ba")
         v = tf.Variable(tf.zeros([l,1]), name = "v")
         c = tf.Variable(tf.zeros([1]), name = "c")
        
-
+        # Basic LSTM for decoding
         cell = tf.nn.rnn_cell.BasicLSTMCell(l)
 
+        # Preds[0] for predictions start span, and Preds[1] for end of span
         preds = [None, None]
+        
+        # This is a dumb hack fix to get the inital mem and state to be [None, l] of zeros
         hk = Hr[:,:l,1]*0
         cell_state = (hk, hk)
         assert hk.get_shape().as_list() == [None, l] 
 
-        for i, _ in enumerate(preds):  # just two iterations for the start point and end point
-            if i > 0:
+        # Just two iterations of decoding for the start point and then the end point
+        for i, _ in enumerate(preds):  
+            if i > 0: #Round 2 should reuse variables from before
                 tf.get_variable_scope().reuse_variables()
 
+            # Mult and extend using hack to get shape compatable
             term2 = tf.matmul(hk,Wa) + ba 
             term2 = tf.transpose(tf.stack([term2 for _ in range(P)]), [1,0,2]) 
             assert term2.get_shape().as_list() == [None, P, l] 
             
+            # Reshape and matmul
             Hr_shaped = tf.reshape(Hr, [-1, 2*l])
             term1 = tf.matmul(Hr_shaped, V)
             term1 = tf.reshape(term1, [-1, P, l])
             assert term1.get_shape().as_list() == [None, P, l] 
 
+            # Add terms and tanh them
             Fk = tf.tanh(term1 + term2)
             assert Fk.get_shape().as_list() == [None, P, l] 
 
+            # Generate beta_term v^T * Fk + c * e(P)
             Fk_shaped = tf.reshape(Fk, [-1, l])
             beta_term = tf.matmul(Fk_shaped, v) + c
             beta_term = tf.reshape(beta_term ,[-1, P, 1])
             assert beta_term.get_shape().as_list() == [None, P, 1] 
 
+            # Get Beta (prob dist over the paragraph)
             beta = tf.nn.softmax(beta_term)
             assert beta.get_shape().as_list() == [None, P, 1] 
 
+            # Setup input to LSTM
             Hr_shaped_cell = tf.transpose(Hr, [0, 2, 1])
             cell_input = tf.squeeze(tf.batch_matmul(Hr_shaped_cell, beta), [2])
             assert cell_input.get_shape().as_list() == [None, 2*l] 
 
+            # Ouput and State for next iteration
             hk, cell_state = cell(cell_input, cell_state)
 
+            #Save a 2D rep of Beta as output
             preds[i] = tf.squeeze(beta, [2])
 
         print("Beta_s Dims:" + str(preds[0].get_shape().as_list()))
