@@ -178,10 +178,10 @@ class Decoder(object):
 
         cell = tf.nn.rnn_cell.BasicLSTMCell(l) #self.size passed in through initialization from "state_size" flag
 
-        B = [None, None]
+        preds = [None, None]
         cell_state = cell.zero_state(self.FLAGS.batch_size, tf.float32)
         hk = tf.transpose(cell_state[1])
-        for i, _ in enumerate(B):  # just two iterations for the start point and end point
+        for i, _ in enumerate(preds):  # just two iterations for the start point and end point
             if i > 0:
                 tf.get_variable_scope().reuse_variables()
             Whb = tf.matmul(Wa,hk) + ba  # should be an l dimensional vec
@@ -190,16 +190,15 @@ class Decoder(object):
             
             # Bs and Be calculation
             preds = tf.matmul(tf.transpose(v), Fk) + c*eP       # Replicate c P+1 times
-            beta = tf.nn.softmax(preds)      #Mask to size of the actual paragraph
 
-            B[i] = beta
-            cell_input = tf.matmul(Hr, tf.transpose(beta))
+            preds[i] = pretrained_embeddings    #Softmax doen in loss function
+            cell_input = tf.matmul(Hr, tf.transpose(tf.nn.softmax(preds)))
             hk, cell_state = cell(tf.transpose(cell_input), cell_state)
             hk = tf.transpose(hk)
 
         print("Beta_s Dims:" + str(B[0].get_shape().as_list()))
         print("Beta_e Dims:" + str(B[1].get_shape().as_list()))
-        return tuple(B) # Bs, Be [batchsize, paragraph_length]
+        return tuple(preds) # Bs, Be [batchsize, paragraph_length]
 
 
 class QASystem(object):
@@ -281,10 +280,15 @@ class QASystem(object):
         # This is what we need to use to calculate the loss function they give us,
         # and importantly, it's already softmax'd. The loss will need to be changed
         # to be -log(Beta_1_i * Beta_2_j) where i is the actual start token, and j is the actual end token.
-
+        '''
         with vs.variable_scope("loss"):
             p = self.Beta_s[:,self.start_answer_placeholder] * self.Beta_e[:,self.end_answer_placeholder]   #First column is for batches?
             self.loss = -tf.reduce_sum(tf.log(p))
+        '''
+        with vs.variable_scope("loss"):
+            l1 = sparse_softmax_cross_entropy_with_logits(self.Beta_s[:,self.start_answer_placeholder], self.start_answer_placeholder)
+            l2 = sparse_softmax_cross_entropy_with_logits(self.Beta_e[:,self.end_answer_placeholder], self.end_answer_placeholder)
+            self.loss = l1 + l2
 
     def setup_embeddings(self):
         """
