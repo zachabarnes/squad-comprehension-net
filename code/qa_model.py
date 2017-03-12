@@ -231,7 +231,7 @@ class QASystem(object):
         self.question_placeholder = tf.placeholder(tf.int32, (self.FLAGS.max_question_size), name="question_placeholder")
         self.start_answer_placeholder = tf.placeholder(tf.int32, (), name="start_answer_placeholder")
         self.end_answer_placeholder = tf.placeholder(tf.int32, (), name="end_answer_placeholder")
-        self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (None, self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
+        self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
         self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
         # ==== assemble pieces ====
