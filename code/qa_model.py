@@ -346,7 +346,9 @@ class QASystem(object):
             a_s, a_e, B_s, B_e = self.answer(session, question, paragraph)
             token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
             
-            print(a_s, a_e, token_answer)
+            print(B_s, "\t", a_s)
+            print(B_e, "\t"  a_e)
+            print(token_answer)
 
             sentence = []
             for token in token_answer:
