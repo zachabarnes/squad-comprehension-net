@@ -288,8 +288,8 @@ class QASystem(object):
         # I think that these losses are equivalent
         with vs.variable_scope("loss"):
             l1 = sparse_softmax_cross_entropy_with_logits(tf.boolean_mask(self.Beta_s[0,:], self.paragraph_mask_placeholder), self.start_answer_placeholder)
-            l2 = sparse_softmax_cross_entropy_with_logits(tf.boolean_mask(self.Beta_e[0,:], self.paragraph_mask_placeholder), self.end_answer_placeholder)
-            self.loss = l1 + l2
+            #l2 = sparse_softmax_cross_entropy_with_logits(tf.boolean_mask(self.Beta_e[0,:], self.paragraph_mask_placeholder), self.end_answer_placeholder)
+            self.loss = l1 #+ l2
 
     def setup_embeddings(self):
         """
@@ -472,7 +472,7 @@ class QASystem(object):
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     num_complete = int(20*float(i)/num_data)
                     sys.stdout.write('\r')
-                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d)" % (cur_epoch, mean_loss,'='*num_complete, i, num_data))
+                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d)" % (cur_epoch + 1, mean_loss,'='*num_complete, i, num_data))
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
