@@ -358,7 +358,6 @@ class QASystem(object):
         answer_tuples = zip(their_answers, our_answers)
         for ground_truth, prediction in answer_tuples:
             total += 1
-            print(prediction, ground_truth)
             exact_match += exact_match_score(prediction, ground_truth)
             f1 += f1_score(prediction, ground_truth)
 
@@ -456,7 +455,7 @@ class QASystem(object):
                 loss = self.optimize(session, q, q_mask, p, p_mask, span)
                 losses.append(loss)
 
-                if i % 100 == 0 or i == 0 or i==num_data:
+                if i % self.FLAGS.print_every == 0 or i == 0 or i==num_data:
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     num_complete = int(20*float(i)/num_data)
                     losses = []
