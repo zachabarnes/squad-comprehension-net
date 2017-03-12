@@ -439,8 +439,12 @@ class QASystem(object):
             losses = []
             for i in range(num_data):
                 (q, q_mask, p, p_mask, span) = random.choice(train_data)
+                while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
+                    (q, q_mask, p, p_mask, span) = random.choice(train_data)
+
                 loss = self.optimize(session, q, q_mask, p, p_mask, span)
                 losses.append(loss)
+                
                 if i % 100 == 0 or i == 0 or i==num_data:
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     num_complete = int(20*float(i)/num_data)
