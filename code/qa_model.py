@@ -84,9 +84,9 @@ class Encoder(object):
         l = self.size
         Q = self.FLAGS.max_question_size
         P = self.FLAGS.max_paragraph_size
-        WQ = tf.get_variable("WQ", [l,l], initializer=tf.contrib.layers.xavier_initializer())
-        WP = tf.get_variable("WB", [l,l], initializer=tf.contrib.layers.xavier_initializer())
-        WR = tf.get_variable("WR", [l,l], initializer=tf.contrib.layers.xavier_initializer())
+        WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) # Uniform distribution, as opposed to xavier, which is normal
+        WP = tf.get_variable("WB", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
+        WR = tf.get_variable("WR", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
         bP = tf.Variable(tf.zeros([self.size,1])) #l (aka self.size)
         w = tf.Variable(tf.zeros([self.size,1])) #l (aka self.size)
         b = tf.Variable(tf.zeros([1,1]))
@@ -168,8 +168,8 @@ class Decoder(object):
         l = self.FLAGS.state_size
         P = self.FLAGS.max_paragraph_size
 
-        V = tf.get_variable("V", [l,2*l], initializer=tf.contrib.layers.xavier_initializer())   #Use xavier initialization for weights, zeros for biases
-        Wa = tf.get_variable("Wa", [l,l], initializer=tf.contrib.layers.xavier_initializer())
+        V = tf.get_variable("V", [l,2*l], initializer=tf.uniform_unit_scaling_initializer(1.0))   #Use xavier initialization for weights, zeros for biases
+        Wa = tf.get_variable("Wa", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
         ba = tf.Variable(tf.zeros([l,1]), name = "ba")
         v = tf.Variable(tf.zeros([l,1]), name = "v")
         c = tf.Variable(tf.zeros([1]), name = "c")
@@ -241,23 +241,16 @@ class QASystem(object):
             self.setup_loss()
 
         # ==== set up training/updating procedure ==
-        # params = tf.trainable_variables()
-
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
         optimizer = opt_function(self.learning_rate)
 
-        # gradients = tf.gradients(self.loss, params)
-        # clipped_gradients, norm = tf.clip_by_global_norm(gradients, self.FLAGS.max_gradient_norm)
-        # self.gradient_norms = norm
+        grads_and_vars = optimizer.compute_gradients(self.loss, tf.trainable_variables())
 
-        # self.updates = opt.apply_gradients(zip(clipped_gradients, params), global_step=self.global_step)
-        grads_and_vars = optimizer.compute_gradients(self.loss)
         grads = [g for g, v in grads_and_vars]
         variables = [v for g, v in grads_and_vars]
-        self.grad_norm = tf.global_norm(grads)
-        grads, _ = tf.clip_by_global_norm(grads, self.FLAGS.max_gradient_norm)
-        grads_and_vars = [(grads[i], variables[i]) for i, v in enumerate(variables)]
-        self.train_op = optimizer.apply_gradients(grads_and_vars)
+
+        clipped_grads, global_norm = tf.clip_by_global_norm(grads, self.FLAGS.max_gradient_norm)
+        self.train_op = optimizer.apply_gradients(zip(clipped_grads, variables), global_step = self.global_step, name = "apply_clipped_grads")
 
         self.saver = tf.train.Saver(tf.global_variables())
 
@@ -288,8 +281,8 @@ class QASystem(object):
         # I think that these losses are equivalent
         with vs.variable_scope("loss"):
             l1 = sparse_softmax_cross_entropy_with_logits(tf.boolean_mask(self.Beta_s[0,:], self.paragraph_mask_placeholder), self.start_answer_placeholder)
-            #l2 = sparse_softmax_cross_entropy_with_logits(tf.boolean_mask(self.Beta_e[0,:], self.paragraph_mask_placeholder), self.end_answer_placeholder)
-            self.loss = l1 #+ l2
+            l2 = sparse_softmax_cross_entropy_with_logits(tf.boolean_mask(self.Beta_e[0,:], self.paragraph_mask_placeholder), self.end_answer_placeholder)
+            self.loss = l1 + l2
 
     def setup_embeddings(self):
         """
