@@ -347,7 +347,7 @@ class QASystem(object):
         #sample_dataset = random.sample(zip(dataset["val_questions"], dataset["val_context"], dataset["val_answer"]), sample)
         our_answers = []
         their_answers = []
-        for question, _, paragraph, _, span, true_answer in dataset:
+        for question, _, paragraph, _, span, true_answer in random.sample(dataset, sample):
             a_s, a_e = self.answer(session, question, paragraph)
             token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
             
@@ -364,7 +364,7 @@ class QASystem(object):
             our_answers.append(our_answer)
             their_answer = ' '.join(word for word in true_answer)
             their_answers.append(their_answer)
-            print(their_answer, our_answer)
+            print(their_answer, "\t", our_answer)
 
         f1 = exact_match = total = 0
         answer_tuples = zip(their_answers, our_answers)
@@ -450,7 +450,7 @@ class QASystem(object):
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
         #num_data = len(train_data)
-        num_data = 10000
+        num_data = 10
 
         small_data = random.sample(train_data, num_data)
         for i, (q, q_mask, p, p_mask, span, answ) in enumerate(small_data):
@@ -476,7 +476,7 @@ class QASystem(object):
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
-            self.evaluate_answer(session, small_data, rev_vocab, sample=100, log=True)
+            self.evaluate_answer(session, small_data, rev_vocab, sample=5, log=True)
 
             #Save model after each epoch
             checkpoint_path = os.path.join(train_dir, model_name, start_time,"model.ckpt")
