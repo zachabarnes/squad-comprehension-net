@@ -196,8 +196,8 @@ class Decoder(object):
             hk, cell_state = cell(tf.transpose(cell_input), cell_state)
             hk = tf.transpose(hk)
 
-        print("Beta_s Dims:" + str(B[0].get_shape().as_list()))
-        print("Beta_e Dims:" + str(B[1].get_shape().as_list()))
+        print("Beta_s Dims:" + str(preds[0].get_shape().as_list()))
+        print("Beta_e Dims:" + str(preds[1].get_shape().as_list()))
         return tuple(preds) # Bs, Be [batchsize, paragraph_length]
 
 
