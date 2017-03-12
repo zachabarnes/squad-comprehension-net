@@ -478,7 +478,7 @@ class QASystem(object):
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
-            self.evaluate_answer(session, small_data, rev_vocab, sample=5, log=True)
+            self.evaluate_answer(session, small_data, rev_vocab, sample=1, log=True)
 
             #Save model after each epoch
             checkpoint_path = os.path.join(train_dir, model_name, start_time,"model.ckpt")
