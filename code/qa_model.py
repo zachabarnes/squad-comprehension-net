@@ -439,7 +439,7 @@ class QASystem(object):
         #num_data = len(train_data)
         num_data = 10
         small_data = random.choice(train_data, num_data)
-        for i, (q, q_mask, p, p_mask, span) in enumerate(small_data)
+        for i, (q, q_mask, p, p_mask, span) in enumerate(small_data):
             while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
                 (q, q_mask, p, p_mask, span) = random.choice(train_data)
                 small_data[i] = (q, q_mask, p, p_mask, span)
