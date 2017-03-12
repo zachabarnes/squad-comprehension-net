@@ -286,8 +286,8 @@ class QASystem(object):
             self.loss = -tf.reduce_sum(tf.log(p))
         '''
         with vs.variable_scope("loss"):
-            l1 = sparse_softmax_cross_entropy_with_logits(self.boolean_mask(self.Beta_s[0,:], self.paragraph_mask_placeholder), self.start_answer_placeholder)
-            l2 = sparse_softmax_cross_entropy_with_logits(self.boolean_mask(self.Beta_e[0,:], self.paragraph_mask_placeholder), self.end_answer_placeholder)
+            l1 = sparse_softmax_cross_entropy_with_logits(tf.boolean_mask(self.Beta_s[0,:], self.paragraph_mask_placeholder), self.start_answer_placeholder)
+            l2 = sparse_softmax_cross_entropy_with_logits(tf.boolean_mask(self.Beta_e[0,:], self.paragraph_mask_placeholder), self.end_answer_placeholder)
             self.loss = l1 + l2
 
     def setup_embeddings(self):
@@ -325,7 +325,7 @@ class QASystem(object):
         a_s = np.argmax(B_s, axis=1)
         a_e = np.argmax(B_e, axis=1)
 
-        return a_s[0], a_e[0], B_s[0], B_e[0]
+        return a_s[0], a_e[0]
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
         """
@@ -347,7 +347,7 @@ class QASystem(object):
         our_answers = []
         their_answers = []
         for question, _, paragraph, _, span, true_answer in dataset:
-            a_s, a_e, B_s, B_e = self.answer(session, question, paragraph)
+            a_s, a_e = self.answer(session, question, paragraph)
             token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
             
             print(a_s, "\t", span[0])
