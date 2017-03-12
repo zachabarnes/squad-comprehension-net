@@ -66,6 +66,8 @@ class Encoder(object):
 
         input_question = tf.expand_dims(input_question, axis = 0)
         input_paragraph = tf.expand_dims(input_paragraph, axis = 0)
+        question_length = tf.expand_dims(question_length, axis = 1)
+        paragraph_length = tf.expand_dims(paragraph_length, axis = 1)
 
         #Preprocessing LSTM
         with tf.variable_scope("question_encode"):
@@ -231,8 +233,8 @@ class QASystem(object):
         self.start_answer_placeholder = tf.placeholder(tf.int32, (), name="start_answer_placeholder")
         self.end_answer_placeholder = tf.placeholder(tf.int32, (), name="end_answer_placeholder")
         self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
-        self.paragraph_length = tf.placeholder(tf.int32, ([None, 1]), name="paragraph_length")
-        self.question_length = tf.placeholder(tf.int32, ([None, 1]), name="question_length")
+        self.paragraph_length = tf.placeholder(tf.int32, ([None]), name="paragraph_length")
+        self.question_length = tf.placeholder(tf.int32, ([None]), name="question_length")
         self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
         # ==== assemble pieces ====
