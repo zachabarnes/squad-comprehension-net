@@ -345,14 +345,19 @@ class QASystem(object):
         for question, _, paragraph, _, _, true_answer in dataset:
             a_s, a_e = self.answer(session, question, paragraph)
             token_answer = paragraph[a_s: a_e + 1]      #The slice of the context paragraph that is our answer
+            
+            print(a_s, a_e, token_answer)
 
             sentence = []
             for token in token_answer:
                 word = rev_vocab[token]
                 sentence.append(word)
 
-            our_answers.append(' '.join(word for word in sentence))
-            their_answers.append(' '.join(word for word in true_answer))
+            our_answer = ' '.join(word for word in sentence)
+            our_answers.append(our_answer)
+            their_answer = ' '.join(word for word in true_answer)
+            their_answers.append(their_answer)
+            print(their_answer, our_answer)
 
         f1 = exact_match = total = 0
         answer_tuples = zip(their_answers, our_answers)
@@ -367,7 +372,7 @@ class QASystem(object):
         if log:
             logging.info("F1: {}, EM: {}, for {} samples".format(f1, exact_match, sample))
             logging.info("Samples:")
-            for i in xrange(min(5, sample)):
+            for i in xrange(min(10, sample)):
                 ground_truth, our_answer = answer_tuples[i]
                 logging.info("Ground Truth: {}, Our Answer: {}".format(ground_truth, our_answer))
 
