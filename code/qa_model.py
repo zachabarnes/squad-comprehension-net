@@ -361,8 +361,8 @@ class QASystem(object):
         """
         Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length)
         ps, pe = self.decoder.decode(Hr, self.paragraph_mask_placeholder)
-        self.pred_s = tf.boolean_mask(ps[0,:], self.paragraph_mask_placeholder)     # For loss
-        self.pred_e = tf.boolean_mask(pe[0,:], self.paragraph_mask_placeholder)     # For loss
+        self.pred_s = tf.boolean_mask(ps, self.paragraph_mask_placeholder)     # For loss
+        self.pred_e = tf.boolean_mask(pe, self.paragraph_mask_placeholder)     # For loss
         self.Beta_s = tf.nn.softmax(self.pred_s)   # For decode
         self.Beta_e = tf.nn.softmax(self.pred_e)   # For decode
 
