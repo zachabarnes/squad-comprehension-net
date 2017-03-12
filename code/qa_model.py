@@ -434,7 +434,7 @@ class QASystem(object):
             for i in range(train_data):
 
                 (q, q_mask, p, p_mask, span) = random.choice(train_data)
-                while span[1] >= 300    # Simply dont process any questions with answers outside of the possible range
+                while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
                     (q, q_mask, p, p_mask, span) = random.choice(train_data)
 
                 loss = self.optimize(session, q, q_mask, p, p_mask, span)
