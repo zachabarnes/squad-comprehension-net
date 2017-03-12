@@ -95,11 +95,11 @@ class Encoder(object):
         HQ = tf.squeeze(HQ)
         HP = tf.squeeze(HP)
 
-        term_1 = tf.matmul(WQ, HQ)
         HPs = tf.unstack(HP, axis = 1)
 
         # Forward Match-LSTM
         with tf.variable_scope("right_match_LSTM"):
+            term_1 = tf.matmul(WQ, HQ)
             cell_r = tf.nn.rnn_cell.BasicLSTMCell(self.size)
             cell_state = cell_r.zero_state(self.FLAGS.batch_size,tf.float32)
             hr = tf.transpose(cell_state[1])
@@ -123,6 +123,7 @@ class Encoder(object):
         ### Calculate everything we just did but backwards (should be pretty much the same code)
         ### Doesn't initialize new variables because they are reused
         with tf.variable_scope("left_match_LSTM"):
+            term_1 = tf.matmul(WQ, HQ)
             cell_l = tf.nn.rnn_cell.BasicLSTMCell(self.size)
             cell_state = cell_l.zero_state(self.FLAGS.batch_size,tf.float32)
             hr = tf.transpose(cell_state[1])
