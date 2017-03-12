@@ -34,52 +34,72 @@ def get_optimizer(opt):
     return optfn
 
 class MatchLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
-    def __init__(self, hidden_size, HQ, term1, FLAGS):
+    """
+    Extension of LSTM cell to do matching and magic. Designed to be fed to dynammic_rnn
+    """
+    def __init__(self, hidden_size, HQ, term1, mats, vecs, FLAGS):
         self.HQ = HQ
         self.term1 = term1
         self.hidden_size = hidden_size
         self.FLAGS = FLAGS
+        self.mats = mats
+        self.vecs = vecs
         super(MatchLSTMCell, self).__init__(hidden_size)
 
     def __call__(self, inputs, state, scope = None):
-        current_batch_size, input_size = inputs.get_shape().as_list()
-        hidden_size = self.hidden_size
+        """
+        inputs: a batch representation (HP at each word i) that is inputs = hp_i and are [None, l]
+        state: a current state for our cell which is LSTM so its a tuple of (c_mem, h_state), both are [None, l]
+        """
+        
+        #For naming convention load in from self the params and rename
         term1 = self.term1
+        WQ, WP, WR = self.mats
+        bP, w, b = self.vecs
+        l, P, Q = self.hidden_size, self.FLAGS.max_paragraph_size, self.FLAGS.max_question_size
+        HQ = self.HQ
         hr = state[1]
         hp_i = inputs
 
-        assert hr.get_shape().as_list() == [None, self.FLAGS.state_size]
-        assert hp_i.get_shape().as_list() == [None, self.FLAGS.state_size]
+        # Check correct input dimensions
+        assert hr.get_shape().as_list() == [None, l]
+        assert hp_i.get_shape().as_list() == [None, l]
 
-        expand = tf.ones([current_batch_size, 1])
-        term2 = tf.matmul(hp_i,WP) + tf.matmul(hr, WR) + tf.matmul(expand, bP)
-        term2 = tf.stack([term2 for _ in range(self.FLAGS.max_question_size)])
+        # Way to extent a [None, l] matrix by dim Q (kinda a hack)
+        term2 = tf.matmul(hp_i,WP) + tf.matmul(hr, WR) + bP
+        term2 = tf.transpose(tf.stack([term2 for _ in range(Q)]), [1,0,2])
 
-        assert term_1.get_shape().as_list() == [None, self.FLAGS.max_question_size, self.FLAGS.state_size]
-        assert term_2.get_shape().as_list() == [None, self.FLAGS.max_question_size, self.FLAGS.state_size]
+        # Check correct term dimensions for use
+        assert term1.get_shape().as_list() == [None, Q, l]
+        assert term2.get_shape().as_list() == [None, Q, l]
 
+        # Yeah pretty sure we need this lol
         G_i = tf.tanh(term1 + term2)
 
-        a_is = []
-        eQ = tf.ones([Q,1])
+        # Reshape to multiply against w
+        G_i_shaped = tf.reshape(G_i, [-1, l])
+        a_i = tf.matmul(G_i_shaped, w) + b
+        a_i = tf.reshape(a_i, [-1, Q, 1])
 
-        for batch_G_i in tf.unstack(G_i, axis=0):
-            a_i = tf.nn.softmax(tf.matmul(batch_G_i,w)+b*eQ)
-            assert a_i.get_shape().as_list() == [self.FLAGS.max_question_size, 1]
-            a_is.append(a_i)
+        # Check that the attention matrix is properly shaped (3rd dim useful for batch_matmul in next step)
+        assert a_i.get_shape().as_list() == [None, Q, 1]
 
-        z_is = []
-        for i, batch_hq in tf.unstack(self.HQ, axis=0):
-            z_comp = tf.matmul(tf.transpose(batch_hq),a_is[i])
-            h_comp = tf.transpose(hp_i[i,:])
-            z_i = tf.concat(0,[h_comp, z_comp])
-            z_is.append(tf.squeeze(z_i))
+        # Prepare dims, and mult attn with question representation in each element of the batch
+        HQ_shaped = tf.transpose(HQ, [0,2,1])
+        z_comp = tf.batch_matmul(HQ_shaped, a_i)
+        z_comp = tf.squeeze(z_comp, [2])
 
-        z_i = tf.stack(z_is)
-        assert z_i.get_shape().as_list() == [current_batch_size, 2*self.FLAGS.state_size]
+        # Check dims of above operation
+        assert z_comp.get_shape().as_list() == [None, l]
 
+        # Concatenate elements for feed into LSTM
+        z_i = tf.concat(1,[hp_i, z_comp])
+
+        # Check dims of LSTM input
+        assert z_i.get_shape().as_list() == [None, 2*l]
+
+        # Return resultant hr and state from super class (BasicLSTM) run with z_i as input and current state given to our cell
         hr, state = super(MatchLSTMCell, self).__call__(z_i, state)
-
         return hr, state
 
 
@@ -92,115 +112,55 @@ class Encoder(object):
 
     def encode(self, input_question, input_paragraph, question_length, paragraph_length, encoder_state_input = None):    # LSTM Preprocessing and Match-LSTM Layers
         """
-        In a generalized encode function, you pass in your inputs,
-        masks, and an initial
-        hidden state input into this function.
-
-        :param inputs: Symbolic representations of your input
-        :param masks: this is to make sure tf.nn.dynamic_rnn doesn't iterate
-                      through masked steps
-        :param encoder_state_input: (Optional) pass this as initial hidden state
-                                    to tf.nn.dynamic_rnn to build conditional representations
-        :return: an encoded representation of your input.
-                 It can be context-level representation, word-level representation,
-                 or both.
+        Description:
         """
-        question_shape = input_question.get_shape().as_list()
-        paragraph_shape = input_paragraph.get_shape().as_list()
-        assert question_shape == [self.FLAGS.embedding_size, self.FLAGS.max_question_size]
-        assert paragraph_shape == [self.FLAGS.embedding_size, self.FLAGS.max_paragraph_size]
 
-        ### Right now the way we set everything up, the first dimension of each input is arbitrary
-        ### If we don't want to handle batching for now, I'm not exactly what to change but I think
-        ### it can be traced back to self.paragraph_placeholder
-
-        input_question = tf.expand_dims(input_question, axis = 0)
-        input_paragraph = tf.expand_dims(input_paragraph, axis = 0)
-        #question_length = tf.reshape(question_length)
-        #paragraph_length = tf.expand_dims(paragraph_length, axis = 0)
+        assert input_question.get_shape().as_list() == [None, self.FLAGS.max_question_size, self.FLAGS.embedding_size]
+        assert input_paragraph.get_shape().as_list() == [None, self.FLAGS.max_paragraph_size, self.FLAGS.embedding_size]
 
         #Preprocessing LSTM
         with tf.variable_scope("question_encode"):
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.size) #self.size passed in through initialization from "state_size" flag
-            HQ, _ = tf.nn.dynamic_rnn(cell, tf.transpose(input_question,[0,2,1]), sequence_length = question_length,  dtype = tf.float32)
-            HQ = tf.transpose(HQ, [0,2,1])
+            HQ, _ = tf.nn.dynamic_rnn(cell, input_question, sequence_length = question_length,  dtype = tf.float32)
+
         with tf.variable_scope("paragraph_encode"):
             cell2 = tf.nn.rnn_cell.BasicLSTMCell(self.size)
-            HP, _ = tf.nn.dynamic_rnn(cell2, tf.transpose(input_paragraph,[0,2,1]), sequence_length = paragraph_length, dtype = tf.float32)   #sequence length masks dynamic_rnn
-            HP = tf.transpose(HP, [0,2,1])
+            HP, _ = tf.nn.dynamic_rnn(cell2, input_paragraph, sequence_length = paragraph_length, dtype = tf.float32)   #sequence length masks dynamic_rnn
 
-        ### Calculate equation 2, https://arxiv.org/pdf/1608.07905.pdf
-        ### The equation is kind of weird because of h arrow, so this calculation will
-        ### involve the LSTM, and the LSTM's states will become H^r right
+        assert HQ.get_shape().as_list() == [None, self.FLAGS.max_question_size, self.FLAGS.state_size]
+        assert HP.get_shape().as_list() == [None, self.FLAGS.max_paragraph_size, self.FLAGS.state_size]
+
+        # Encoding params
         l = self.size
         Q = self.FLAGS.max_question_size
         P = self.FLAGS.max_paragraph_size
 
-        WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) # Uniform distribution, as opposed to xavier, which is normal
-        WP = tf.get_variable("WB", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
+        # Uniform distribution, as opposed to xavier, which is normal
+        WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) 
+        WP = tf.get_variable("WP", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
         WR = tf.get_variable("WR", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
 
-        bP = tf.Variable(tf.zeros([self.size,1])) #l (aka self.size)
-        w = tf.Variable(tf.zeros([self.size,1])) #l (aka self.size)
+        bP = tf.Variable(tf.zeros([1, l]))
+        w = tf.Variable(tf.zeros([l,1])) 
         b = tf.Variable(tf.zeros([1,1]))
 
-        HQ = tf.squeeze(HQ)
-        HP = tf.squeeze(HP)
+        # Calculate term1 by resphapeing to l
+        HQ_shaped = tf.reshape(HQ, [-1, l])
+        term1 = tf.matmul(HQ_shaped, WQ)
+        term1 = tf.reshape(term1, [-1, Q, l])
 
-        term1 = tf.matmul(WQ, HQ)
-        HPs = tf.unstack(HP, axis = 1)
+        # Initialize forward and backward matching LSTMcells with same matching params
+        with tf.variable_scope("forward"):
+            cell_f = MatchLSTMCell(l, HQ, term1, (WQ, WP, WR), (bP, w, b), self.FLAGS) 
+        with tf.variable_scope("backward"):
+            cell_b = MatchLSTMCell(l, HQ, term1, (WQ, WP, WR), (bP, w, b), self.FLAGS)
 
-        # Forward Match-LSTM
-        with tf.variable_scope("right_match_LSTM"):
-            cell_r = tf.nn.rnn_cell.BasicLSTMCell(self.size)
-            cell_state = cell_r.zero_state(self.FLAGS.batch_size,tf.float32)
-            hr = tf.transpose(cell_state[1])
-            hrs = []
-            for i, hp_i in enumerate(HPs):
-                if i > 0:
-                    tf.get_variable_scope().reuse_variables()
-                hp_i = tf.expand_dims(hp_i, axis=1)
-                term2 = tf.matmul(WP,hp_i) + tf.matmul(WR,hr) +bP
-                eQ = tf.ones([1, Q]) 
-
-                G_i = tf.tanh(term1+tf.matmul(term2, eQ))
-
-                a_i = tf.nn.softmax(tf.matmul(tf.transpose(w),G_i) + b*eQ)
-
-                attn = tf.matmul(HQ,tf.transpose(a_i))
-                z_i = tf.concat(0,[hp_i, attn])
-                hr, cell_state = cell_r(tf.transpose(z_i), cell_state)
-                hr = tf.transpose(hr)
-                hrs.append(hr)
-            HR_right = tf.concat(1,hrs)
-
-        ### Calculate everything we just did but backwards (should be pretty much the same code)
-        ### Doesn't initialize new variables because they are reused
-        with tf.variable_scope("left_match_LSTM"):
-            cell_l = tf.nn.rnn_cell.BasicLSTMCell(self.size)
-            cell_state = cell_l.zero_state(self.FLAGS.batch_size,tf.float32)
-            hr = tf.transpose(cell_state[1])
-            hrs = []
-            for i, hp_i in enumerate(reversed(HPs)):
-                if i > 0:
-                    tf.get_variable_scope().reuse_variables()
-                hp_i = tf.expand_dims(hp_i, axis=1)
-                term2 = tf.matmul(WP,hp_i) + tf.matmul(WR,hr) + bP
-                eQ = tf.ones([1, Q]) 
-
-                G_i = tf.tanh(term1+tf.matmul(term2, eQ))
-
-                a_i = tf.nn.softmax(tf.matmul(tf.transpose(w),G_i) + b*eQ)
-
-                attn = tf.matmul(HQ,tf.transpose(a_i))
-                z_i = tf.concat(0,[hp_i, attn])
-                hr, cell_state = cell_l(tf.transpose(z_i), cell_state)
-                hr = tf.transpose(hr)
-                hrs.append(hr)
-            HR_left = tf.concat(1,hrs)
+        # Calculate encodings for both forward and backward directions
+        (HR_right, HR_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_f, cell_b, HP, sequence_length = paragraph_length, dtype = tf.float32)
         
         ### Append the two things calculated above into H^R
-        HR = tf.concat(0,[HR_right,HR_left])
+        HR = tf.concat(2,[HR_right, HR_left])
+        assert HR.get_shape().as_list() == [None, P, 2*l]
         print("HR dims: " + str(HR.get_shape().as_list()))
         return HR
 
@@ -276,22 +236,24 @@ class QASystem(object):
         self.global_step = tf.Variable(int(0), trainable = False, name = "global_step")
 
         # # ==== set up placeholder tokens ======== 3d (because of batching)
-        # self.paragraph_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
-        # self.question_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_question_size), name="question_placeholder")
-        # self.start_answer_placeholder = tf.placeholder(tf.int32, (None), name="start_answer_placeholder")
-        # self.end_answer_placeholder = tf.placeholder(tf.int32, (None), name="end_answer_placeholder")
-        # self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (None, self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
-        # self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
+        self.paragraph_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
+        self.question_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_question_size), name="question_placeholder")
+        self.start_answer_placeholder = tf.placeholder(tf.int32, (None), name="start_answer_placeholder")
+        self.end_answer_placeholder = tf.placeholder(tf.int32, (None), name="end_answer_placeholder")
+        self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (None, self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
+        self.paragraph_length = tf.placeholder(tf.int32, (None), name="paragraph_length")
+        self.question_length = tf.placeholder(tf.int32, (None), name="question_length")
+        self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
         # ==== set up placeholder tokens ======== 2d
-        self.paragraph_placeholder = tf.placeholder(tf.int32, (self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
-        self.question_placeholder = tf.placeholder(tf.int32, (self.FLAGS.max_question_size), name="question_placeholder")
-        self.start_answer_placeholder = tf.placeholder(tf.int32, (), name="start_answer_placeholder")
-        self.end_answer_placeholder = tf.placeholder(tf.int32, (), name="end_answer_placeholder")
-        self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
-        self.paragraph_length = tf.placeholder(tf.int32, ([1]), name="paragraph_length")
-        self.question_length = tf.placeholder(tf.int32, ([1]), name="question_length")
-        self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
+        # self.paragraph_placeholder = tf.placeholder(tf.int32, (self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
+        # self.question_placeholder = tf.placeholder(tf.int32, (self.FLAGS.max_question_size), name="question_placeholder")
+        # self.start_answer_placeholder = tf.placeholder(tf.int32, (), name="start_answer_placeholder")
+        # self.end_answer_placeholder = tf.placeholder(tf.int32, (), name="end_answer_placeholder")
+        # self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
+        # self.paragraph_length = tf.placeholder(tf.int32, ([1]), name="paragraph_length")
+        # self.question_length = tf.placeholder(tf.int32, ([1]), name="question_length")
+        # self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
         # ==== assemble pieces ====
         with tf.variable_scope("qa", initializer=tf.uniform_unit_scaling_initializer(1.0)):
@@ -352,8 +314,8 @@ class QASystem(object):
             embed_file = np.load(self.FLAGS.embed_path)
             pretrained_embeddings = embed_file['glove']
             embeddings = tf.Variable(pretrained_embeddings, name = "embeddings", dtype=tf.float32, trainable = False)
-            self.paragraph_embedding = tf.transpose(tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder), [1,0])
-            self.question_embedding = tf.transpose(tf.nn.embedding_lookup(embeddings,self.question_placeholder), [1,0])
+            self.paragraph_embedding = tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder)
+            self.question_embedding = tf.nn.embedding_lookup(embeddings,self.question_placeholder)
 
     def decode(self, session, question, paragraph, question_mask, paragraph_mask):
         """
