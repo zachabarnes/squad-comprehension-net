@@ -33,6 +33,56 @@ def get_optimizer(opt):
         assert (False)
     return optfn
 
+class MatchLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
+    def __init__(self, hidden_size, HQ, term1, FLAGS):
+        self.HQ = HQ
+        self.term1 = term1
+        self.hidden_size = hidden_size
+        self.FLAGS = FLAGS
+        super(MatchLSTMCell, self).__init__(hidden_size)
+
+    def __call__(self, inputs, state, scope = None):
+        current_batch_size, input_size = inputs.get_shape().as_list()
+        hidden_size = self.hidden_size
+        term1 = self.term1
+        hr = state[1]
+        hp_i = inputs
+
+        assert hr.get_shape().as_list() == [None, self.FLAGS.state_size]
+        assert hp_i.get_shape().as_list() == [None, self.FLAGS.state_size]
+
+        expand = tf.ones([current_batch_size, 1])
+        term2 = tf.matmul(hp_i,WP) + tf.matmul(hr, WR) + tf.matmul(expand, bP)
+        term2 = tf.stack([term2 for _ in range(self.FLAGS.max_question_size)])
+
+        assert term_1.get_shape().as_list() == [None, self.FLAGS.max_question_size, self.FLAGS.state_size]
+        assert term_2.get_shape().as_list() == [None, self.FLAGS.max_question_size, self.FLAGS.state_size]
+
+        G_i = tf.tanh(term1 + term2)
+
+        a_is = []
+        eQ = tf.ones([Q,1])
+
+        for batch_G_i in tf.unstack(G_i, axis=0):
+            a_i = tf.nn.softmax(tf.matmul(batch_G_i,w)+b*eQ)
+            assert a_i.get_shape().as_list() == [self.FLAGS.max_question_size, 1]
+            a_is.append(a_i)
+
+        z_is = []
+        for i, batch_hq in tf.unstack(self.HQ, axis=0):
+            z_comp = tf.matmul(tf.transpose(batch_hq),a_is[i])
+            h_comp = tf.transpose(hp_i[i,:])
+            z_i = tf.concat(0,[h_comp, z_comp])
+            z_is.append(tf.squeeze(z_i))
+
+        z_i = tf.stack(z_is)
+        assert z_i.get_shape().as_list() == [current_batch_size, 2*self.FLAGS.state_size]
+
+        hr, state = super(MatchLSTMCell, self).__call__(z_i, state)
+
+        return hr, state
+
+
 
 class Encoder(object):
     def __init__(self, size, vocab_dim, FLAGS):
@@ -85,9 +135,11 @@ class Encoder(object):
         l = self.size
         Q = self.FLAGS.max_question_size
         P = self.FLAGS.max_paragraph_size
+
         WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) # Uniform distribution, as opposed to xavier, which is normal
         WP = tf.get_variable("WB", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
         WR = tf.get_variable("WR", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
+
         bP = tf.Variable(tf.zeros([self.size,1])) #l (aka self.size)
         w = tf.Variable(tf.zeros([self.size,1])) #l (aka self.size)
         b = tf.Variable(tf.zeros([1,1]))
@@ -110,7 +162,9 @@ class Encoder(object):
                 hp_i = tf.expand_dims(hp_i, axis=1)
                 term2 = tf.matmul(WP,hp_i) + tf.matmul(WR,hr) +bP
                 eQ = tf.ones([1, Q]) 
-                G_i = tf.nn.tanh(term1 + tf.matmul(term2, eQ))
+
+                G_i = tf.tanh(term1+tf.matmul(term2, eQ))
+
                 a_i = tf.nn.softmax(tf.matmul(tf.transpose(w),G_i) + b*eQ)
 
                 attn = tf.matmul(HQ,tf.transpose(a_i))
@@ -133,7 +187,9 @@ class Encoder(object):
                 hp_i = tf.expand_dims(hp_i, axis=1)
                 term2 = tf.matmul(WP,hp_i) + tf.matmul(WR,hr) + bP
                 eQ = tf.ones([1, Q]) 
-                G_i = tf.nn.tanh(term1 + tf.matmul(term2, eQ))
+
+                G_i = tf.tanh(term1+tf.matmul(term2, eQ))
+
                 a_i = tf.nn.softmax(tf.matmul(tf.transpose(w),G_i) + b*eQ)
 
                 attn = tf.matmul(HQ,tf.transpose(a_i))
@@ -472,9 +528,9 @@ class QASystem(object):
 
                 if i % self.FLAGS.print_every == 0 or i == 0 or i==num_data:
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
-                    num_complete = int(20*float(i)/num_data)
+                    num_complete = int(20*float(i+1)/num_data)
                     sys.stdout.write('\r')
-                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d)" % (cur_epoch + 1, mean_loss,'='*num_complete, i, num_data))
+                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d)" % (cur_epoch + 1, mean_loss,'='*num_complete, i+1, num_data))
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
@@ -486,4 +542,5 @@ class QASystem(object):
                 os.makedirs(checkpoint_path)
             save_path = saver.save(session, checkpoint_path)
             print("Model saved in file: %s" % save_path)
+
 
