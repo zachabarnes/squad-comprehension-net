@@ -286,8 +286,8 @@ class QASystem(object):
             self.loss = -tf.reduce_sum(tf.log(p))
         '''
         with vs.variable_scope("loss"):
-            l1 = sparse_softmax_cross_entropy_with_logits(self.Beta_s[:,self.start_answer_placeholder], self.start_answer_placeholder)
-            l2 = sparse_softmax_cross_entropy_with_logits(self.Beta_e[:,self.end_answer_placeholder], self.end_answer_placeholder)
+            l1 = sparse_softmax_cross_entropy_with_logits(self.Beta_s, self.start_answer_placeholder)
+            l2 = sparse_softmax_cross_entropy_with_logits(self.Beta_e, self.end_answer_placeholder)
             self.loss = l1 + l2
 
     def setup_embeddings(self):
