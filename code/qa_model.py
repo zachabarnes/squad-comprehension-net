@@ -40,7 +40,7 @@ class Encoder(object):
         self.vocab_dim = vocab_dim
         self.FLAGS = FLAGS
 
-    def encode(self, input_question, input_paragraph, paragraph_mask, encoder_state_input = None):    # LSTM Preprocessing and Match-LSTM Layers
+    def encode(self, input_question, input_paragraph, question_length, paragraph_length, encoder_state_input = None):    # LSTM Preprocessing and Match-LSTM Layers
         """
         In a generalized encode function, you pass in your inputs,
         masks, and an initial
@@ -60,7 +60,6 @@ class Encoder(object):
         assert question_shape == [self.FLAGS.embedding_size, self.FLAGS.max_question_size]
         assert paragraph_shape == [self.FLAGS.embedding_size, self.FLAGS.max_paragraph_size]
 
-
         ### Right now the way we set everything up, the first dimension of each input is arbitrary
         ### If we don't want to handle batching for now, I'm not exactly what to change but I think
         ### it can be traced back to self.paragraph_placeholder
@@ -71,11 +70,11 @@ class Encoder(object):
         #Preprocessing LSTM
         with tf.variable_scope("question_encode"):
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.size) #self.size passed in through initialization from "state_size" flag
-            HQ, _ = tf.nn.dynamic_rnn(cell, tf.transpose(input_question,[0,2,1]), dtype = tf.float32)
+            HQ, _ = tf.nn.dynamic_rnn(cell, tf.transpose(input_question,[0,2,1]), sequence_length = question_length,  dtype = tf.float32)
             HQ = tf.transpose(HQ, [0,2,1])
         with tf.variable_scope("paragraph_encode"):
             cell2 = tf.nn.rnn_cell.BasicLSTMCell(self.size)
-            HP, _ = tf.nn.dynamic_rnn(cell2, tf.transpose(input_paragraph,[0,2,1]), dtype = tf.float32)   #sequence length masks dynamic_rnn
+            HP, _ = tf.nn.dynamic_rnn(cell2, tf.transpose(input_paragraph,[0,2,1]), sequence_length = paragraph_length, dtype = tf.float32)   #sequence length masks dynamic_rnn
             HP = tf.transpose(HP, [0,2,1])
 
         ### Calculate equation 2, https://arxiv.org/pdf/1608.07905.pdf
@@ -232,6 +231,8 @@ class QASystem(object):
         self.start_answer_placeholder = tf.placeholder(tf.int32, (), name="start_answer_placeholder")
         self.end_answer_placeholder = tf.placeholder(tf.int32, (), name="end_answer_placeholder")
         self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
+        self.paragraph_length = tf.placeholder(tf.int32, (), name="paragraph_length")
+        self.question_length = tf.placeholder(tf.int32, (), name="question_length")
         self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
         # ==== assemble pieces ====
@@ -262,7 +263,7 @@ class QASystem(object):
         to assemble your reading comprehension system!
         :return:
         """
-        Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.paragraph_mask_placeholder)
+        Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length)
         self.Beta_s, self.Beta_e = self.decoder.decode(Hr, self.paragraph_mask_placeholder)
 
     def setup_loss(self):
@@ -395,7 +396,10 @@ class QASystem(object):
         input_feed[self.start_answer_placeholder] = start_ans
         input_feed[self.end_answer_placeholder] = end_ans
         input_feed[self.paragraph_mask_placeholder] = np.array(train_p_mask).T
+        input_feed[self.paragraph_length] = np.sum(train_p_mask)
+        input_feed[self.question_length] = np.sum(train_q_mask)
         input_feed[self.dropout_placeholder] = self.FLAGS.dropout
+
 
         output_feed = []
 
