@@ -225,7 +225,7 @@ class Decoder(object):
         self.output_size = output_size
         self.FLAGS = FLAGS
 
-    def decode(self, knowledge_rep, paragraph_mask): 
+    def decode(self, knowledge_rep, paragraph_mask, cell_init): 
         """
         takes in a knowledge representation  and output a probability estimation over
         all paragraph tokens on which token should be
@@ -247,6 +247,9 @@ class Decoder(object):
         ba = tf.Variable(tf.zeros([1,l]), name = "ba")
         v = tf.Variable(tf.zeros([l,1]), name = "v")
         c = tf.Variable(tf.zeros([1]), name = "c")
+
+
+        hk = cell_init
        
         # Basic LSTM for decoding
         cell = tf.nn.rnn_cell.BasicLSTMCell(l)
@@ -255,7 +258,7 @@ class Decoder(object):
         preds = [None, None]
         
         # This is a dumb hack fix to get the inital mem and state to be [None, l] of zeros
-        hk = Hr[:,:l,1]*0
+        #hk = Hr[:,:l,1]*0
         cell_state = (hk, hk)
         assert hk.get_shape().as_list() == [None, l] 
 
@@ -330,6 +333,7 @@ class QASystem(object):
         self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (None, self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
         self.paragraph_length = tf.placeholder(tf.int32, (None), name="paragraph_length")
         self.question_length = tf.placeholder(tf.int32, (None), name="question_length")
+        self.cell_initial_placeholder = tf.placeholder(tf.float32, (None, self.FLAGS.state_size), name="cell_init")
         self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
         # ==== set up placeholder tokens ======== 2d
@@ -371,7 +375,7 @@ class QASystem(object):
         :return:
         """
         Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length)
-        ps, pe = self.decoder.decode(Hr, self.paragraph_mask_placeholder)
+        ps, pe = self.decoder.decode(Hr, self.paragraph_mask_placeholder, self.cell_initial_placeholder)
         self.pred_s = tf.boolean_mask(ps, self.paragraph_mask_placeholder)     # For loss
         self.pred_e = tf.boolean_mask(pe, self.paragraph_mask_placeholder)     # For loss
         self.Beta_s = tf.nn.softmax(self.pred_s)   # For decode
@@ -516,6 +520,7 @@ class QASystem(object):
         input_feed[self.paragraph_length] = np.reshape(np.sum(train_p_mask),[-1])   # Sum and make into a list
         input_feed[self.question_length] = np.reshape(np.sum(train_q_mask),[-1])    # Sum and make into a list
         input_feed[self.dropout_placeholder] = self.FLAGS.dropout
+        input_feed[self.cell_initial_placeholder] = np.zeros((self.FLAGS.batch_size, self.FLAGS.state_size))
 
 
         output_feed = []
