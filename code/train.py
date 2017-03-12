@@ -30,6 +30,7 @@ tf.app.flags.DEFINE_string("log_dir", "log", "Path to store log and flag files (
 tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
 tf.app.flags.DEFINE_integer("print_every", 1, "How many iterations to do per print.")
 tf.app.flags.DEFINE_bool("verbose", False, "")
+tf.app.flags.DEFINE_bool("tb", False, "Log Tensorboard Graph")
 tf.app.flags.DEFINE_integer("keep", 0, "How many checkpoints to keep, 0 indicates keep all.")
 tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab file (default: ./data/squad/vocab.dat)")
 tf.app.flags.DEFINE_string("embed_path", "", "Path to the trimmed GLoVe embedding (default: ./data/squad/glove.trimmed.{embedding_size}.npz)")
@@ -47,7 +48,7 @@ def main(_):
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
     FLAGS.embed_path = embed_path
     vocab_path = FLAGS.vocab_path or pjoin(FLAGS.data_dir, "vocab.dat")
-    vocab, rev_vocab = initialize_vocab(vocab_path)
+    _, rev_vocab = initialize_vocab(vocab_path)
 
     encoder = Encoder(size=FLAGS.state_size, vocab_dim=FLAGS.embedding_size, FLAGS=FLAGS)
     decoder = Decoder(output_size=FLAGS.output_size, FLAGS=FLAGS)
@@ -64,6 +65,10 @@ def main(_):
         json.dump(FLAGS.__flags, fout)
 
     with tf.Session() as sess:
+        if FLAGS.tb is True:
+            tensorboard_path = os.path.join(FLAGS.log_dir, "tensorboard")        
+            file_writer = tf.summary.FileWriter(tensorboard_path, sess.graph)
+
         load_train_dir = get_normalized_train_dir(FLAGS.load_train_dir or FLAGS.train_dir)
         initialize_model(sess, qa, load_train_dir)
 

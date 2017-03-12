@@ -40,7 +40,7 @@ class Encoder(object):
         self.vocab_dim = vocab_dim
         self.FLAGS = FLAGS
 
-    def encode(self, input_question, input_paragraph, masks, encoder_state_input = None):    # LSTM Preprocessing and Match-LSTM Layers
+    def encode(self, input_question, input_paragraph, paragraph_mask, encoder_state_input = None):    # LSTM Preprocessing and Match-LSTM Layers
         """
         In a generalized encode function, you pass in your inputs,
         masks, and an initial
@@ -75,7 +75,7 @@ class Encoder(object):
             HQ = tf.transpose(HQ, [0,2,1])
         with tf.variable_scope("paragraph_encode"):
             cell2 = tf.nn.rnn_cell.BasicLSTMCell(self.size)
-            HP, _ = tf.nn.dynamic_rnn(cell2, tf.transpose(input_paragraph,[0,2,1]), dtype = tf.float32)
+            HP, _ = tf.nn.dynamic_rnn(cell2, tf.transpose(input_paragraph,[0,2,1]), dtype = tf.float32)   #sequence length masks dynamic_rnn
             HP = tf.transpose(HP, [0,2,1])
 
         ### Calculate equation 2, https://arxiv.org/pdf/1608.07905.pdf
@@ -152,7 +152,7 @@ class Decoder(object):
         self.output_size = output_size
         self.FLAGS = FLAGS
 
-    def decode(self, knowledge_rep):    # Answer Pointer Layer
+    def decode(self, knowledge_rep, paragraph_mask):    # Answer Pointer Layer
         """
         takes in a knowledge representation
         and output a probability estimation over
@@ -164,7 +164,7 @@ class Decoder(object):
                               decided by how you choose to implement the encoder
         :return:
         """
-
+        #paragraph_mask = tf.cast(paragraph_mask, tf.float32)
         l = self.FLAGS.state_size
         P = self.FLAGS.max_paragraph_size
 
@@ -189,7 +189,9 @@ class Decoder(object):
             Fk = tf.tanh(tf.matmul(V,Hr) + tf.matmul(Whb, eP))  #Replicate Whb P+1 times
             
             # Bs and Be calculation
-            beta = tf.nn.softmax(tf.matmul(tf.transpose(v), Fk) + c*eP)    #Replicate c P+1 times
+            preds = tf.matmul(tf.transpose(v), Fk) + c*eP       # Replicate c P+1 times
+            beta = tf.nn.softmax(preds)      #Mask to size of the actual paragraph
+
             B[i] = beta
             cell_input = tf.matmul(Hr, tf.transpose(beta))
             hk, cell_state = cell(tf.transpose(cell_input), cell_state)
@@ -230,7 +232,7 @@ class QASystem(object):
         self.question_placeholder = tf.placeholder(tf.int32, (self.FLAGS.max_question_size), name="question_placeholder")
         self.start_answer_placeholder = tf.placeholder(tf.int32, (), name="start_answer_placeholder")
         self.end_answer_placeholder = tf.placeholder(tf.int32, (), name="end_answer_placeholder")
-        self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
+        self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (None, self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
         self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
         # ==== assemble pieces ====
@@ -269,7 +271,7 @@ class QASystem(object):
         :return:
         """
         Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.paragraph_mask_placeholder)
-        self.Beta_s, self.Beta_e = self.decoder.decode(Hr)
+        self.Beta_s, self.Beta_e = self.decoder.decode(Hr, self.paragraph_mask_placeholder)
 
     def setup_loss(self):
         """
@@ -338,11 +340,11 @@ class QASystem(object):
         """
 
         temp_dataset = zip(dataset["val_questions"], dataset["val_context"], dataset["val_answer"])
-        sample_dataset = random.sample(dataset, sample)
+        sample_dataset = random.sample(temp_dataset, sample)
         our_answers = []
         for question, paragraph, true_answer in sample_dataset:
             a_s, a_e = self.answer(session, question, paragraph)
-            token_answer = p[a_s : a_e + 1]           #The slice of the context paragraph that is our answer
+            token_answer = paragraph[a_s : a_e + 1]           #The slice of the context paragraph that is our answer
 
             sentence = []
             for token in token_answer:
@@ -386,7 +388,7 @@ class QASystem(object):
         input_feed[self.paragraph_placeholder] = np.array(train_p)
         input_feed[self.start_answer_placeholder] = start_ans
         input_feed[self.end_answer_placeholder] = end_ans
-        input_feed[self.paragraph_mask_placeholder] = np.array(train_p_mask)
+        #input_feed[self.paragraph_mask_placeholder] = np.array(train_p_mask).T
         input_feed[self.dropout_placeholder] = self.FLAGS.dropout
 
         output_feed = []
@@ -434,20 +436,27 @@ class QASystem(object):
         model_name = "match-lstm"
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"])
-        num_data = len(train_data)
+        #num_data = len(train_data)
+        num_data = 1
+        (q, q_mask, p, p_mask, span) = random.choice(train_data)
+        while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
+            (q, q_mask, p, p_mask, span) = random.choice(train_data)
+
+
         for cur_epoch in range(self.FLAGS.epochs):
             losses = []
             for i in range(num_data):
-                (q, q_mask, p, p_mask, span) = random.choice(train_data)
-                while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
-                    (q, q_mask, p, p_mask, span) = random.choice(train_data)
+                #(q, q_mask, p, p_mask, span) = random.choice(train_data)
+                #while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
+                #    (q, q_mask, p, p_mask, span) = random.choice(train_data)
 
                 loss = self.optimize(session, q, q_mask, p, p_mask, span)
                 losses.append(loss)
-                
+
                 if i % 100 == 0 or i == 0 or i==num_data:
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     num_complete = int(20*float(i)/num_data)
+                    losses = []
                     sys.stdout.write('\r')
                     sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d)" % (cur_epoch, mean_loss,'='*num_complete, i, num_data))
                     sys.stdout.flush()
@@ -459,6 +468,6 @@ class QASystem(object):
             checkpoint_path = os.path.join(train_dir, model_name, start_time,"model.ckpt")
             if not os.path.exists(checkpoint_path):
                 os.makedirs(checkpoint_path)
-            save_path = saver.save(sess, checkpoint_path)
+            save_path = saver.save(session, checkpoint_path)
             print("Model saved in file: %s" % save_path)
 
