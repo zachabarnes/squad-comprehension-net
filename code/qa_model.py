@@ -279,7 +279,7 @@ class Decoder(object):
             Fk = tf.tanh(term1 + term2)
             assert Fk.get_shape().as_list() == [None, P, l] 
 
-            # Generate beta_term v^T*Fk + c ⊗ e(P)
+            # Generate beta_term v^T * Fk + c * e(P)
             Fk_shaped = tf.reshape(Fk, [-1, l])
             beta_term = tf.matmul(Fk_shaped, v) + c
             beta_term = tf.reshape(beta_term ,[-1, P, 1])
