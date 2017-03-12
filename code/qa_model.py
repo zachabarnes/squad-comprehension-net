@@ -342,12 +342,12 @@ class QASystem(object):
         #sample_dataset = random.sample(zip(dataset["val_questions"], dataset["val_context"], dataset["val_answer"]), sample)
         our_answers = []
         their_answers = []
-        for question, _, paragraph, _, _, true_answer in dataset:
+        for question, _, paragraph, _, span, true_answer in dataset:
             a_s, a_e, B_s, B_e = self.answer(session, question, paragraph)
             token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
             
-            print(B_s, "\t", a_s)
-            print(B_e, "\t",  a_e)
+            print(B_s, "\t", a_s, "\t", span[0])
+            print(B_e, "\t",  a_e, "\t", span[1])
             print(token_answer)
 
             sentence = []
