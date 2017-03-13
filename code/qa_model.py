@@ -542,7 +542,7 @@ class QASystem(object):
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                     sys.stdout.write('\r')
-                    sys.stdout.write("EPOCH: %d ==> (Avg Loss:%.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [lr: %.2f, norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr, norm))
+                    sys.stdout.write("EPOCH: %d ==> (Avg Loss:%.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [lr: %.4f, norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr, norm))
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
