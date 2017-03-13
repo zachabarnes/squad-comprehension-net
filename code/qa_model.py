@@ -378,13 +378,16 @@ class QASystem(object):
         self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 1000, decay_rate = 0.96, staircase=False)
         optimizer = opt_function(self.decayed_rate)
 
-        grads_and_vars = optimizer.compute_gradients(self.loss, tf.trainable_variables())
+        params = tf.trainable_variables()
+        grads_and_vars = optimizer.compute_gradients(self.loss, params)
 
-        grads = [g for g, v in grads_and_vars]
-        variables = [v for g, v in grads_and_vars]
+        #grads = [g for g, v in grads_and_vars]
+        #variables = [v for g, v in grads_and_vars]
+        #clipped_grads, self.global_norm = tf.clip_by_global_norm(grads, self.FLAGS.max_gradient_norm)
 
-        clipped_grads, self.global_norm = tf.clip_by_global_norm(grads, self.FLAGS.max_gradient_norm)
-        self.train_op = optimizer.apply_gradients(zip(clipped_grads, variables), global_step = self.global_step, name = "apply_clipped_grads")
+        clipped_grads_and_vars = [(tf.clip_by_norm(g, self.FLAGS.max_gradient_norm), v) for g, v in grads_and_vars]
+        self.global_norm = tf.global_norm(params, name="global_Norm")
+        self.train_op = optimizer.apply_gradients(clipped_grads_and_vars, global_step = self.global_step, name = "apply_clipped_grads")
 
         self.saver = tf.train.Saver(tf.global_variables())
 
@@ -432,7 +435,7 @@ class QASystem(object):
             loss_list_2 = [tf.nn.sparse_softmax_cross_entropy_with_logits(masked_preds_e[i], self.end_answer_placeholder[i]) for i in range(len(masked_preds_e))]
             l1 = tf.reduce_mean(loss_list_1)
             l2 = tf.reduce_mean(loss_list_2)
-            self.loss = tf.reduce_mean(l1 + l2)
+            self.loss = l1 + l2
         
 
     def setup_embeddings(self):
