@@ -507,12 +507,12 @@ class QASystem(object):
         for question, question_mask, paragraph, paragraph_mask, span, true_answer in random.sample(dataset, sample):
             a_s, a_e, B_s, B_e = self.answer(session, question, paragraph, question_mask, paragraph_mask)
             token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
-            
+            '''
             print("Start guess: ", a_s, "\tActual Start: ", span[0])
             print("End guess: ", a_e, "\tActual End: ", span[1])
             print("Token Answer:\t", token_answer)
             print("B_s:\t", B_s)
-
+            '''
             sentence = []
             for token in token_answer:
                 word = rev_vocab[token]
@@ -522,7 +522,7 @@ class QASystem(object):
             our_answers.append(our_answer)
             their_answer = ' '.join(word for word in true_answer)
             their_answers.append(their_answer)
-            print(their_answer, "\t", our_answer)
+            #print(their_answer, "\t", our_answer)
 
         f1 = exact_match = total = 0
         answer_tuples = zip(their_answers, our_answers)
