@@ -8,6 +8,7 @@ import os
 import copy
 import random
 import sys
+import math
 from datetime import datetime
 
 import numpy as np
@@ -213,7 +214,7 @@ class Encoder(object):
 
         # Calculate encodings for both forward and backward directions
         
-        paragraph_length = tf.reshape(paragraph_length, [-1, 1])
+        #paragraph_length = tf.reshape(paragraph_length, [-1, 1])
         #assert(paragraph_length.get_shape() == (None, 1))
         print(paragraph_length)
         (HR_right, HR_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_f, cell_b, HP, sequence_length = paragraph_length, dtype = tf.float32)
@@ -425,8 +426,8 @@ class QASystem(object):
         :return:
         """
         input_feed = {}
-        input_feed[self.question_placeholder] = np.array([question])
-        input_feed[self.paragraph_placeholder] = np.array([paragraph])
+        input_feed[self.question_placeholder] = np.reshape(np.array(question), (1,-1))
+        input_feed[self.paragraph_placeholder] = np.reshape(np.array(paragraph), (1,-1))
         input_feed[self.paragraph_mask_placeholder] = np.array([paragraph_mask])
         input_feed[self.paragraph_length] = np.sum(list(paragraph_mask))
         input_feed[self.question_length] = np.sum(list(question_mask))
@@ -578,7 +579,7 @@ class QASystem(object):
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
         #num_data = len(train_data)
-        num_data = 10
+        num_data = 100
 
         #Make small data set for small sample training
         small_data = random.sample(train_data, num_data)
@@ -589,8 +590,9 @@ class QASystem(object):
 
         # Normal training loop
         for cur_epoch in range(self.FLAGS.epochs):
+
             losses = []
-            for i in range(num_data):
+            for i in range(int(math.ceil(num_data/self.FLAGS.batch_size))):
                 #(q, q_mask, p, p_mask, span, answ) = random.choice(small_data)
                 batch = self.get_batch(small_data)
                 #while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
@@ -601,9 +603,9 @@ class QASystem(object):
 
                 if i % self.FLAGS.print_every == 0 or i == 0 or i==num_data:
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
-                    num_complete = int(20*float(i+1)/num_data)
+                    num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                     sys.stdout.write('\r')
-                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d)" % (cur_epoch + 1, mean_loss,'='*num_complete, i+1, num_data))
+                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d)" % (cur_epoch + 1, mean_loss,'='*num_complete, (i+1)*self.FLAGS.batch_size, num_data))
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
