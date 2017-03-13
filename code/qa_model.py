@@ -356,6 +356,7 @@ class QASystem(object):
             self.setup_embeddings()
             self.setup_system()
             self.setup_loss()
+            self.setup_predictions()
 
         # ==== set up training/updating procedure ==
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
@@ -381,17 +382,20 @@ class QASystem(object):
         :return:
         """
         Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length)
-        ps, pe = self.decoder.decode(Hr, self.paragraph_mask_placeholder, self.cell_initial_placeholder)
-        #self.pred_s = ps * self.paragraph_mask_placeholder      # MASKING
-        #self.pred_e = pe * self.paragraph_mask_placeholder      # MASKING
-        start_predictions = tf.unstack(ps, self.FLAGS.batch_size)
-        end_predictions = tf.unstack(pe, self.FLAGS.batch_size)
-        masks = tf.unstack(self.paragraph_mask_placeholder, self.FLAGS.batch_size)
+        self.pred_s, self.pred_e = self.decoder.decode(Hr, self.paragraph_mask_placeholder, self.cell_initial_placeholder)
+        
 
-        self.pred_s = [tf.boolean_mask(p, mask) for p, mask in zip(start_predictions, masks)]
-        self.pred_e = [tf.boolean_mask(p, mask) for p, mask in zip(end_predictions, masks)]
-        self.Beta_s = [tf.nn.softmax(p) for p in self.pred_s]   # For decode
-        self.Beta_e = [tf.nn.softmax(p) for p in self.pred_e]   # For decode
+    def setup_predictions(self):
+        #start_predictions = tf.unstack(self.pred_s, 1)
+        #end_predictions = tf.unstack(self.pred_e, 1)
+        #masks = tf.unstack(self.paragraph_mask_placeholder, 1)
+        with vs.variable_scope("prediction"):
+            masked_pred_s = tf.boolean_mask(self.pred_s, self.paragraph_mask_placeholder)
+            masked_pred_e = tf.boolean_mask(self.pred_e, self.paragraph_mask_placeholder)
+
+            self.Beta_s = tf.nn.softmax(masked_pred_s)
+            self.Beta_e = tf.nn.softmax(masked_pred_e)
+
 
     def setup_loss(self):
         """
@@ -402,8 +406,15 @@ class QASystem(object):
         # and importantly, it's already softmax'd. The loss will need to be changed
         # to be -log(Beta_1_i * Beta_2_j) where i is the actual start token, and j is the actual end token.
         with vs.variable_scope("loss"):
-            loss_list_1 = [tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_s[i], self.start_answer_placeholder[i]) for i in range(len(self.pred_s))]
-            loss_list_2 = [tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_e[i], self.end_answer_placeholder[i]) for i in range(len(self.pred_e))]
+            start_predictions = tf.unstack(self.pred_s, self.FLAGS.batch_size)
+            end_predictions = tf.unstack(self.pred_e, self.FLAGS.batch_size)
+            masks = tf.unstack(self.paragraph_mask_placeholder, self.FLAGS.batch_size)
+
+            masked_preds_s = [tf.boolean_mask(p, mask) for p, mask in zip(start_predictions, masks)]
+            masked_preds_e = [tf.boolean_mask(p, mask) for p, mask in zip(end_predictions, masks)]
+
+            loss_list_1 = [tf.nn.sparse_softmax_cross_entropy_with_logits(masked_preds_s[i], self.start_answer_placeholder[i]) for i in range(len(masked_preds_s))]
+            loss_list_2 = [tf.nn.sparse_softmax_cross_entropy_with_logits(masked_preds_e[i], self.end_answer_placeholder[i]) for i in range(len(masked_preds_e))]
             l1 = tf.reduce_mean(loss_list_1)
             l2 = tf.reduce_mean(loss_list_2)
             self.loss = tf.reduce_mean(l1 + l2)
@@ -454,10 +465,10 @@ class QASystem(object):
 
         B_s, B_e = self.decode(session, [question], [paragraph], [question_mask], [paragraph_mask])
 
-        a_s = np.argmax(B_s, axis=1)
-        a_e = np.argmax(B_e, axis=1)
+        a_s = np.argmax(B_s)
+        a_e = np.argmax(B_e)
 
-        return a_s[0], a_e[0], B_s[0], B_e[0]
+        return a_s, a_e, B_s, B_e
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
         """
