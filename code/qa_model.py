@@ -193,9 +193,9 @@ class Encoder(object):
         P = self.FLAGS.max_paragraph_size
 
         # Uniform distribution, as opposed to xavier, which is normal
-        WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) 
-        WP = tf.get_variable("WP", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
-        WR = tf.get_variable("WR", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
+        WQ = tf.get_variable("WQ", [l,l], initializer=tf.tf.contrib.layers.xavier_initializer()(1.0)) 
+        WP = tf.get_variable("WP", [l,l], initializer=tf.tf.contrib.layers.xavier_initializer()(1.0))
+        WR = tf.get_variable("WR", [l,l], initializer=tf.tf.contrib.layers.xavier_initializer()(1.0))
 
         bP = tf.Variable(tf.zeros([1, l]))
         w = tf.Variable(tf.zeros([l,1])) 
@@ -247,8 +247,8 @@ class Decoder(object):
         Hr = knowledge_rep  
 
         # Decode variables
-        V = tf.get_variable("V", [2*l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))   
-        Wa = tf.get_variable("Wa", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
+        V = tf.get_variable("V", [2*l,l], initializer=tf.contrib.layers.xavier_initializer())   
+        Wa = tf.get_variable("Wa", [l,l], initializer=tf.contrib.layers.xavier_initializer())
         ba = tf.Variable(tf.zeros([1,l]), name = "ba")
         v = tf.Variable(tf.zeros([l,1]), name = "v")
         c = tf.Variable(tf.zeros([1]), name = "c")
@@ -619,7 +619,7 @@ class QASystem(object):
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
-            self.evaluate_answer(session, small_data, rev_vocab, sample=1, log=True)
+            self.evaluate_answer(session, small_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
 
             #Save model after each epoch
             checkpoint_path = os.path.join(train_dir, model_name, start_time,"model.ckpt")
