@@ -454,8 +454,9 @@ class QASystem(object):
 
         a_s = np.argmax(B_s, axis=1)
         a_e = np.argmax(B_e, axis=1)
+        print a_s, a_e
 
-        return a_s[0], a_e[0]
+        return a_s[0], a_e[0], B_s[0], B_e[0]
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
         """
@@ -477,12 +478,13 @@ class QASystem(object):
         our_answers = []
         their_answers = []
         for question, question_mask, paragraph, paragraph_mask, span, true_answer in random.sample(dataset, sample):
-            a_s, a_e = self.answer(session, question, paragraph, question_mask, paragraph_mask)
+            a_s, a_e, B_s, B_e = self.answer(session, question, paragraph, question_mask, paragraph_mask)
             token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
             
-            print(a_s, "\t", span[0])
-            print(a_e, "\t", span[1])
-            print(token_answer)
+            print("Start guess: ", a_s, "\tActual Start: ", span[0])
+            print("End guess: ", a_e, "\tActual End: ", span[1])
+            print("Token Answer:\t", token_answer)
+            print("B_s:\t", B_s)
 
             sentence = []
             for token in token_answer:
@@ -618,7 +620,7 @@ class QASystem(object):
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
-            self.evaluate_answer(session, small_data, rev_vocab, sample=5, log=True)
+            self.evaluate_answer(session, small_data, rev_vocab, sample=25, log=True)
 
             #Save model after each epoch
             checkpoint_path = os.path.join(train_dir, model_name, start_time,"model.ckpt")
