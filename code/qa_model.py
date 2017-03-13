@@ -301,7 +301,7 @@ class Decoder(object):
             hk, cell_state = cell(cell_input, cell_state)
 
             #Save a 2D rep of Beta as output
-            preds[i] = tf.squeeze(beta, [2])
+            preds[i] = beta_term    # TODO: Do we want beta? Or beta_term?   Beta would be softmaxed twice by this
 
         print("Beta_s Dims:" + str(preds[0].get_shape().as_list()))
         print("Beta_e Dims:" + str(preds[1].get_shape().as_list()))
@@ -328,8 +328,8 @@ class QASystem(object):
         # # ==== set up placeholder tokens ======== 3d (because of batching)
         self.paragraph_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
         self.question_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_question_size), name="question_placeholder")
-        self.start_answer_placeholder = tf.placeholder(tf.int32, (None), name="start_answer_placeholder")
-        self.end_answer_placeholder = tf.placeholder(tf.int32, (None), name="end_answer_placeholder")
+        self.start_answer_placeholder = tf.placeholder(tf.int32, (self.FLAGS.batch_size), name="start_answer_placeholder")
+        self.end_answer_placeholder = tf.placeholder(tf.int32, (self.FLAGS.batch_size), name="end_answer_placeholder")
         self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (None, self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
         self.paragraph_length = tf.placeholder(tf.int32, (None), name="paragraph_length")
         self.question_length = tf.placeholder(tf.int32, (None), name="question_length")
@@ -396,6 +396,8 @@ class QASystem(object):
         '''
         # I think that these losses are equivalent
         with vs.variable_scope("loss"):
+            print(self.pred_s, self.start_answer_placeholder)
+            print(self.pred_e, self.end_answer_placeholder)
             l1 = sparse_softmax_cross_entropy_with_logits(self.pred_s, self.start_answer_placeholder)
             l2 = sparse_softmax_cross_entropy_with_logits(self.pred_e, self.end_answer_placeholder)
             self.loss = l1 + l2
@@ -514,8 +516,8 @@ class QASystem(object):
 
         input_feed[self.question_placeholder] = np.array(list(train_qs))
         input_feed[self.paragraph_placeholder] = np.array(list(train_ps))
-        input_feed[self.start_answer_placeholder] = np.expand_dims(np.array(start_answers), axis=0)
-        input_feed[self.end_answer_placeholder] = np.expand_dims(np.array(end_answers), axis=0)
+        input_feed[self.start_answer_placeholder] = np.array(start_answers)
+        input_feed[self.end_answer_placeholder] = np.array(end_answers)
         input_feed[self.paragraph_mask_placeholder] = np.array(list(train_p_masks))
         input_feed[self.paragraph_length] = np.sum(list(train_p_masks), axis = 1)   # Sum and make into a list
         input_feed[self.question_length] = np.sum(list(train_q_masks), axis = 1)    # Sum and make into a list
@@ -574,12 +576,14 @@ class QASystem(object):
         #num_data = len(train_data)
         num_data = 10
 
+        #Make small data set for small sample training
         small_data = random.sample(train_data, num_data)
         for i, (q, q_mask, p, p_mask, span, answ) in enumerate(small_data):
             while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
                 (q, q_mask, p, p_mask, span, answ) = random.choice(train_data)
                 small_data[i] = (q, q_mask, p, p_mask, span, answ)
 
+        # Normal training loop
         for cur_epoch in range(self.FLAGS.epochs):
             losses = []
             for i in range(num_data):
