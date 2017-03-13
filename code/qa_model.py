@@ -115,65 +115,8 @@ class MatchLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
 
         # Return resultant hr and state from super class (BasicLSTM) run with z_i as input and current state given to our cell
         hr, state = super(MatchLSTMCell, self).__call__(z_i, state)
+
         return hr, state
-
-# class DecodeLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
-#     """
-#     Extension of LSTM cell to do decoding and magic. Designed to be fed to dynammic_rnn
-#     """
-#     def __init__(self, hidden_size, HR, mats, vecs, FLAGS):
-#         self.HR = HR
-#         self.hidden_size = hidden_size
-#         self.FLAGS = FLAGS
-#         self.mats = mats
-#         self.vecs = vecs
-#         super(DecodeLSTMCell, self).__init__(hidden_size)
-
-#     def __call__(self, inputs, state, scope = None):
-#         """
-#         inputs: a batch representation (HP at each word i) that is inputs = hp_i and are [None, l]
-#         state: a current state for our cell which is LSTM so its a tuple of (c_mem, h_state), both are [None, l]
-#         """
-        
-#         #For naming convention load in from self the params and rename
-#         V, Wa = self.mats
-#         ba, v, c = self.vecs
-#         l, P, Q = self.hidden_size, self.FLAGS.max_paragraph_size, self.FLAGS.max_question_size
-#         Hr = self.HR
-#         hk = state[1]
-
-#         # Check correct input dimensions
-#         assert hk.get_shape().as_list() == [None, l] 
-#         assert inputs.get_shape().as_list() == [None, 1] 
-
-#         term2 = tf.matmul(hk,Wa) + ba 
-#         term2 = tf.transpose(tf.stack([term2 for _ in range(P)]), [1,0,2]) 
-#         assert term2.get_shape().as_list() == [None, P, l] 
-        
-#         Hr_shaped = tf.reshape(Hr, [-1, 2*l])
-#         term1 = tf.matmul(Hr_shaped, V)
-#         term1 = tf.reshape(term1, [-1, P, l])
-#         assert term1.get_shape().as_list() == [None, P, l] 
-
-#         Fk = tf.tanh(term1 + term2)
-#         assert Fk.get_shape().as_list() == [None, P, l] 
-
-#         Fk_shaped = tf.reshape(Fk, [-1, l])
-#         beta_term = tf.matmul(Fk_shaped, v) + c
-#         beta_term = tf.reshape(beta_term ,[-1, P, 1])
-#         assert beta_term.get_shape().as_list() == [None, P, 1] 
-
-#         beta = tf.nn.softmax(beta_term)
-#         assert beta.get_shape().as_list() == [None, P, 1] 
-
-#         Hr_shaped_cell = tf.transpose(Hr, [0, 2, 1])
-#         cell_input = tf.squeeze(tf.batch_matmul(Hr_shaped_cell, beta), [2])
-#         assert cell_input.get_shape().as_list() == [None, 2*l] 
-
-#         hk, state = super(DecodeLSTMCell, self).__call__(cell_input, state)
-
-#         beta_return = tf.squeeze(beta [2])
-#         return hk, state
 
 class Encoder(object):
     def __init__(self, size, vocab_dim, FLAGS):
@@ -206,20 +149,6 @@ class Encoder(object):
         Q = self.FLAGS.max_question_size
         P = self.FLAGS.max_paragraph_size
 
-        # # Uniform distribution, as opposed to xavier, which is normal
-        # WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) 
-        # WP = tf.get_variable("WP", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
-        # WR = tf.get_variable("WR", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
-
-        # bP = tf.Variable(tf.zeros([1, l]))
-        # w = tf.Variable(tf.zeros([l,1])) 
-        # b = tf.Variable(tf.zeros([1,1]))
-
-        # # Calculate term1 by resphapeing to l
-        # HQ_shaped = tf.reshape(HQ, [-1, l])
-        # term1 = tf.matmul(HQ_shaped, WQ)
-        # term1 = tf.reshape(term1, [-1, Q, l])
-
         # Initialize forward and backward matching LSTMcells with same matching params
         with tf.variable_scope("forward"):
             cell_f = MatchLSTMCell(l, HQ, self.FLAGS) 
@@ -227,17 +156,12 @@ class Encoder(object):
             cell_b = MatchLSTMCell(l, HQ, self.FLAGS)
 
         # Calculate encodings for both forward and backward directions
-        
-        #paragraph_length = tf.reshape(paragraph_length, [-1, 1])
-        #assert(paragraph_length.get_shape() == (None, 1))
-        #print(paragraph_length)
         (HR_right, HR_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_f, cell_b, HP, sequence_length = paragraph_length, dtype = tf.float32)
         
         ### Append the two things calculated above into H^R
         HR = tf.concat(2,[HR_right, HR_left])
         assert HR.get_shape().as_list() == [None, P, 2*l]
-        
-        #print("HR dims: " + str(HR.get_shape().as_list()))
+    
         return HR
 
 class Decoder(object):
@@ -247,12 +171,8 @@ class Decoder(object):
 
     def decode(self, knowledge_rep, paragraph_mask, cell_init): 
         """
-        takes in a knowledge representation  and output a probability estimation over
-        all paragraph tokens on which token should be
-        the start of the answer span, and which should be the end of the answer span.
 
-        :param knowledge_rep: it is a representation of the paragraph and question,
-                              decided by how you choose to implement the encoder
+        :param knowledge_rep: it is a representation of the paragraph and question                
         :return:
         """
 
@@ -267,9 +187,6 @@ class Decoder(object):
         ba = tf.Variable(tf.zeros([1,l]), name = "ba")
         v = tf.Variable(tf.zeros([l,1]), name = "v")
         c = tf.Variable(tf.zeros([1]), name = "c")
-
-
-        hk = cell_init
        
         # Basic LSTM for decoding
         cell = tf.nn.rnn_cell.BasicLSTMCell(l)
@@ -277,8 +194,8 @@ class Decoder(object):
         # Preds[0] for predictions start span, and Preds[1] for end of span
         preds = [None, None]
         
-        # This is a dumb hack fix to get the inital mem and state to be [None, l] of zeros
-        #hk = Hr[:,:l,1]*0
+        # Initial hidden layer (and state) from placeholder
+        hk = cell_init
         cell_state = (hk, hk)
         assert hk.get_shape().as_list() == [None, l] 
 
@@ -323,8 +240,6 @@ class Decoder(object):
             #Save a 2D rep of Beta as output
             preds[i] = tf.squeeze(beta_term)    # TODO: Do we want beta? Or beta_term?   Beta would be softmaxed twice by this
 
-        #print("Beta_s Dims:" + str(preds[0].get_shape().as_list()))
-        #print("Beta_e Dims:" + str(preds[1].get_shape().as_list()))
         return tuple(preds) # Bs, Be [batchsize, paragraph_length]
 
 
@@ -356,16 +271,6 @@ class QASystem(object):
         self.cell_initial_placeholder = tf.placeholder(tf.float32, (None, self.FLAGS.state_size), name="cell_init")
         #self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
-        # ==== set up placeholder tokens ======== 2d
-        # self.paragraph_placeholder = tf.placeholder(tf.int32, (self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
-        # self.question_placeholder = tf.placeholder(tf.int32, (self.FLAGS.max_question_size), name="question_placeholder")
-        # self.start_answer_placeholder = tf.placeholder(tf.int32, (), name="start_answer_placeholder")
-        # self.end_answer_placeholder = tf.placeholder(tf.int32, (), name="end_answer_placeholder")
-        # self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
-        # self.paragraph_length = tf.placeholder(tf.int32, ([1]), name="paragraph_length")
-        # self.question_length = tf.placeholder(tf.int32, ([1]), name="question_length")
-        # self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
-
         # ==== assemble pieces ====
         with tf.variable_scope("qa", initializer=tf.uniform_unit_scaling_initializer(1.0)):
             self.setup_embeddings()
@@ -391,19 +296,16 @@ class QASystem(object):
 
     def setup_system(self):
         """
-        After your modularized implementation of encoder and decoder
-        you should call various functions inside encoder, decoder here
-        to assemble your reading comprehension system!
-        :return:
+
         """
         Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length)
         self.pred_s, self.pred_e = self.decoder.decode(Hr, self.paragraph_mask_placeholder, self.cell_initial_placeholder)
         
 
     def setup_predictions(self):
-        #start_predictions = tf.unstack(self.pred_s, 1)
-        #end_predictions = tf.unstack(self.pred_e, 1)
-        #masks = tf.unstack(self.paragraph_mask_placeholder, 1)
+        """
+
+        """
         with vs.variable_scope("prediction"):
             masked_pred_s = tf.boolean_mask(self.pred_s, self.paragraph_mask_placeholder)
             masked_pred_e = tf.boolean_mask(self.pred_e, self.paragraph_mask_placeholder)
@@ -414,12 +316,8 @@ class QASystem(object):
 
     def setup_loss(self):
         """
-        Set up your loss computation here
-        :return:
+        loss computation 
         """
-        # This is what we need to use to calculate the loss function they give us,
-        # and importantly, it's already softmax'd. The loss will need to be changed
-        # to be -log(Beta_1_i * Beta_2_j) where i is the actual start token, and j is the actual end token.
         with vs.variable_scope("loss"):
             start_predictions = tf.unstack(self.pred_s, self.FLAGS.batch_size)
             end_predictions = tf.unstack(self.pred_e, self.FLAGS.batch_size)
@@ -438,7 +336,6 @@ class QASystem(object):
     def setup_embeddings(self):
         """
         Loads distributed word representations based on placeholder tokens
-        :return:
         """
         with vs.variable_scope("embeddings"):
             embed_file = np.load(self.FLAGS.embed_path)
@@ -451,17 +348,8 @@ class QASystem(object):
         """
         Returns the probability distribution over different positions in the paragraph
         so that other methods like self.answer() will be able to work properly
-        :return:
         """
         input_feed = {}
-        '''
-        input_feed[self.question_placeholder] = np.reshape(np.array(question), (1,-1))
-        input_feed[self.paragraph_placeholder] = np.reshape(np.array(paragraph), (1,-1))
-        input_feed[self.paragraph_mask_placeholder] = np.array([paragraph_mask])
-        input_feed[self.paragraph_length] = np.sum(list(paragraph_mask))
-        input_feed[self.question_length] = np.sum(list(question_mask))
-        input_feed[self.cell_initial_placeholder] = np.zeros((1, self.FLAGS.state_size))
-        '''
 
         input_feed[self.question_placeholder] = np.array(list(qs))
         input_feed[self.paragraph_placeholder] = np.array(list(ps))
@@ -595,7 +483,7 @@ class QASystem(object):
         You should also implement learning rate annealing (look into tf.train.exponential_decay)
         Considering the long time to train, you should save your model per epoch.
 
-        More ambitious appoarch can include implement early stopping, or reload
+        More ambitious approach can include implement early stopping, or reload
         previous models if they have higher performance than the current one
 
         As suggested in the document, you should evaluate your training progress by
@@ -643,7 +531,6 @@ class QASystem(object):
 
         # Normal training loop
         for cur_epoch in range(self.FLAGS.epochs):
-
             losses = []
             for i in range(int(math.ceil(num_data/self.FLAGS.batch_size))):
                 batch = self.get_batch(train_data)
@@ -655,7 +542,7 @@ class QASystem(object):
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                     sys.stdout.write('\r')
-                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d) [lr: %f, norm: %.2f]" % (cur_epoch + 1, mean_loss,'='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr, norm))
+                    sys.stdout.write("EPOCH: %d ==> (Avg Loss:%.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [lr: %.2f, norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr, norm))
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
