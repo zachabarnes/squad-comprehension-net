@@ -442,7 +442,7 @@ class QASystem(object):
         input_feed[self.question_length] = np.sum(list(q_masks), axis = 1)    # Sum and make into a list
         input_feed[self.cell_initial_placeholder] = np.zeros((1, self.FLAGS.state_size))
 
-        output_feed = [self.Beta_s, self.Beta_e]    # Get the softmaxed outputs
+        output_feed = [self.Beta_s, self.Beta_e, self.pred_s, self.pred_e]    # Get the softmaxed outputs
 
         outputs = session.run(output_feed, input_feed)
 
@@ -450,11 +450,11 @@ class QASystem(object):
 
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
 
-        B_s, B_e = self.decode(session, [question], [paragraph], [question_mask], [paragraph_mask])
+        B_s, B_e, pred_s, pred_e = self.decode(session, [question], [paragraph], [question_mask], [paragraph_mask])
 
         a_s = np.argmax(B_s, axis=1)
         a_e = np.argmax(B_e, axis=1)
-        print (a_s, a_e)
+        print ("pred_s", pred_s)
 
         return a_s[0], a_e[0], B_s[0], B_e[0]
 
