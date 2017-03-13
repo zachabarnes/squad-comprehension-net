@@ -500,23 +500,22 @@ class QASystem(object):
         This method is equivalent to a step() function
         :return:
         """
-
-        print(zip(*batch))  # Unzip batch
+        train_qs, train_q_masks, train_ps, train_p_masks, train_spans, train_answers = zip(*batch)    # Unzip batch, each returned element is a tuple of lists
 
         input_feed = {}
 
-        start_ans = train_span[0]
-        end_ans = train_span[1]
+        start_answers = [train_span[0] for train_span in list(train_spans)]
+        end_answers = [train_span[1] for train_span in list(train_spans)]
+        print (np.expand_dims(np.array(start_answers), axis=0))
 
-        input_feed[self.question_placeholder] = np.array(train_q)
-        input_feed[self.paragraph_placeholder] = np.array(train_p)
-        input_feed[self.start_answer_placeholder] = start_ans
-        input_feed[self.end_answer_placeholder] = end_ans
-        input_feed[self.paragraph_mask_placeholder] = np.array(train_p_mask).T
-        input_feed[self.paragraph_length] = np.reshape(np.sum(train_p_mask),[-1])   # Sum and make into a list
-        input_feed[self.question_length] = np.reshape(np.sum(train_q_mask),[-1])    # Sum and make into a list
+        input_feed[self.question_placeholder] = np.array(list(train_qs))
+        input_feed[self.paragraph_placeholder] = np.array(list(train_ps))
+        input_feed[self.start_answer_placeholder] = np.expand_dims(np.array(start_answers), axis=0)
+        input_feed[self.end_answer_placeholder] = np.expand_dims(np.array(end_answers), axis=0)
+        input_feed[self.paragraph_mask_placeholder] = np.array(list(train_p_masks))
+        input_feed[self.paragraph_length] = np.sum(list(train_p_masks), axis = 1)   # Sum and make into a list
+        input_feed[self.question_length] = np.sum(list(train_q_masks), axis = 1)    # Sum and make into a list
         input_feed[self.dropout_placeholder] = self.FLAGS.dropout
-
 
         output_feed = []
 
@@ -528,7 +527,7 @@ class QASystem(object):
         return loss
 
     def get_batch(self, dataset):
-        random.sample(dataset, self.FLAGS.batch_size)
+        return random.sample(dataset, self.FLAGS.batch_size)
 
 
     def train(self, session, dataset, train_dir, rev_vocab):
