@@ -36,8 +36,8 @@ tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab 
 tf.app.flags.DEFINE_string("embed_path", "", "Path to the trimmed GLoVe embedding (default: ./data/squad/glove.trimmed.{embedding_size}.npz)")
 tf.app.flags.DEFINE_integer("max_paragraph_size", 300, "The length to cut paragraphs off at")   # As per Frank's histogram
 tf.app.flags.DEFINE_integer("max_question_size", 20, "The length to cut question off at")   # As per Frank's histogram
-tf.app.flags.DEFINE_integer("data_set_size", 100, "The dataset size to debug on")   # As per Frank's histogram
-tf.app.flags.DEFINE_integer("eval_size", 10, "The number of examples to evaluate on. Must be less than data_set size")
+tf.app.flags.DEFINE_integer("data_set_size", 0, "The dataset size to debug on. If zero, use full dataset")   # As per Frank's histogram
+tf.app.flags.DEFINE_integer("eval_size", 100, "The number of examples to evaluate on. Must be less than data_set size")
 
 FLAGS = tf.app.flags.FLAGS
 

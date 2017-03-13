@@ -579,7 +579,12 @@ class QASystem(object):
         return loss, lr , norm
 
     def get_batch(self, dataset):
-        return random.sample(dataset, self.FLAGS.batch_size)
+        batch = random.sample(dataset, self.FLAGS.batch_size)
+        for i, (q, q_mask, p, p_mask, span, answ) in enumerate(batch):
+            while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
+                (q, q_mask, p, p_mask, span, answ) = random.choice(dataset)
+                batch[i] = (q, q_mask, p, p_mask, span, answ)
+        return batch
 
 
     def train(self, session, dataset, train_dir, rev_vocab):
@@ -618,25 +623,31 @@ class QASystem(object):
         model_name = "match-lstm"
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
-        #num_data = len(train_data)
-        num_data = self.FLAGS.data_set_size
+        
+        num_data = len(train_data)
+
+        '''
+        if self.FLAGS.data_set_size is 0:
+            num_data = len(train_data)
+        else:
+            num_data = self.FLAGS.data_set_size
 
         #Make small data set for small sample training
+
         small_data = random.sample(train_data, num_data)
         for i, (q, q_mask, p, p_mask, span, answ) in enumerate(small_data):
             while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
                 (q, q_mask, p, p_mask, span, answ) = random.choice(train_data)
                 small_data[i] = (q, q_mask, p, p_mask, span, answ)
+        '''
 
         # Normal training loop
         for cur_epoch in range(self.FLAGS.epochs):
 
             losses = []
             for i in range(int(math.ceil(num_data/self.FLAGS.batch_size))):
-                batch = self.get_batch(small_data)
-                #while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
-                #    (q, q_mask, p, p_mask, span) = random.choice(train_data)
-
+                batch = self.get_batch(train_data)
+                
                 loss, lr, norm = self.optimize(session, batch)
                 losses.append(loss)
 
@@ -644,11 +655,11 @@ class QASystem(object):
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                     sys.stdout.write('\r')
-                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d) [lr: %.2f, norm: %.2f]" % (cur_epoch + 1, mean_loss,'='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr, norm))
+                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d) [lr: %f, norm: %.2f]" % (cur_epoch + 1, mean_loss,'='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr, norm))
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
-            self.evaluate_answer(session, small_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
+            self.evaluate_answer(session, train_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
 
             #Save model after each epoch
             checkpoint_path = os.path.join(train_dir, model_name, start_time,"model.ckpt")
