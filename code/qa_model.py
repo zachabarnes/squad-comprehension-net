@@ -21,6 +21,7 @@ from tensorflow.python.ops.nn import bidirectional_dynamic_rnn
 from tensorflow.python.ops.nn import dynamic_rnn
 
 from evaluate import exact_match_score, f1_score
+from utils import beta_summaries
 
 logging.basicConfig(level=logging.INFO)
 
@@ -281,6 +282,7 @@ class QASystem(object):
         # ==== set up training/updating procedure ==
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
         self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 1000, decay_rate = 0.95, staircase=True)
+        tf.summary.scalar("learning_rate", self.decayed_rate)
         optimizer = opt_function(self.decayed_rate)
 
         grads_and_vars = optimizer.compute_gradients(self.loss, tf.trainable_variables())
@@ -289,35 +291,30 @@ class QASystem(object):
         variables = [v for g, v in grads_and_vars]
 
         clipped_grads, self.global_norm = tf.clip_by_global_norm(grads, self.FLAGS.max_gradient_norm)
+        tf.summary.scalar("global_norm", self.global_norm)
         self.train_op = optimizer.apply_gradients(zip(clipped_grads, variables), global_step = self.global_step, name = "apply_clipped_grads")
 
         self.saver = tf.train.Saver(tf.global_variables())
 
 
     def setup_system(self):
-        """
-
-        """
         Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length)
         self.pred_s, self.pred_e = self.decoder.decode(Hr, self.paragraph_mask_placeholder, self.cell_initial_placeholder)
         
 
     def setup_predictions(self):
-        """
-
-        """
         with vs.variable_scope("prediction"):
             masked_pred_s = tf.boolean_mask(self.pred_s, self.paragraph_mask_placeholder)
             masked_pred_e = tf.boolean_mask(self.pred_e, self.paragraph_mask_placeholder)
 
             self.Beta_s = tf.nn.softmax(masked_pred_s)
             self.Beta_e = tf.nn.softmax(masked_pred_e)
+            beta_summaries(self.Beta_s, "Beta_S")
+            beta_summaries(self.Beta_e, "Beta_E")
+
 
 
     def setup_loss(self):
-        """
-        loss computation 
-        """
         with vs.variable_scope("loss"):
             start_predictions = tf.unstack(self.pred_s, self.FLAGS.batch_size)
             end_predictions = tf.unstack(self.pred_e, self.FLAGS.batch_size)
@@ -331,6 +328,7 @@ class QASystem(object):
             l1 = tf.reduce_mean(loss_list_1)
             l2 = tf.reduce_mean(loss_list_2)
             self.loss = l1 + l2
+            tf.summary.scalar('loss', self.loss)
         
 
     def setup_embeddings(self):
@@ -343,6 +341,7 @@ class QASystem(object):
             embeddings = tf.Variable(pretrained_embeddings, name = "embeddings", dtype=tf.float32, trainable = False)
             self.paragraph_embedding = tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder)
             self.question_embedding = tf.nn.embedding_lookup(embeddings,self.question_placeholder)
+
 
     def decode(self, session, qs, ps, q_masks, p_masks):  #Currently still decodes one at a time
         """
@@ -364,6 +363,7 @@ class QASystem(object):
 
         return outputs
 
+
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
 
         B_s, B_e = self.decode(session, [question], [paragraph], [question_mask], [paragraph_mask])
@@ -372,6 +372,7 @@ class QASystem(object):
         a_e = np.argmax(B_e)
 
         return a_s, a_e, B_s, B_e
+
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
         """
@@ -461,8 +462,14 @@ class QASystem(object):
         output_feed.append(self.loss)
         output_feed.append(self.decayed_rate)
         output_feed.append(self.global_norm)
-
-        tr, loss, lr, norm = session.run(output_feed, input_feed)
+        
+        if self.FLAGS.tb is True:
+            output_feed.append(self.global_step)
+            output_feed.append(self.tb_vars)
+            tr, loss, lr, norm, step, summary = session.run(output_feed, input_feed)
+            self.tensorboard_writer.add_summary(summary, step)
+        else:
+            tr, loss, lr, norm = session.run(output_feed, input_feed) 
 
         return loss, lr , norm
 
@@ -498,6 +505,10 @@ class QASystem(object):
         :param train_dir: path to the directory where you should save the model checkpoint
         :return:
         """
+        if self.FLAGS.tb is True:
+            tensorboard_path = os.path.join(self.FLAGS.log_dir, "tensorboard")
+            self.tb_vars = tf.summary.merge_all()        
+            self.tensorboard_writer = tf.summary.FileWriter(tensorboard_path, session.graph)
 
         tic = time.time()
         params = tf.trainable_variables()
@@ -544,6 +555,7 @@ class QASystem(object):
                     sys.stdout.write('\r')
                     sys.stdout.write("EPOCH: %d ==> (Avg Loss: %.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [lr: %.4f, norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr, norm))
                     sys.stdout.flush()
+
             sys.stdout.write('\n')
 
             self.evaluate_answer(session, train_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)

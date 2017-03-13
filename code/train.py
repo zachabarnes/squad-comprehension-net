@@ -15,7 +15,7 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-tf.app.flags.DEFINE_float("learning_rate", 0.01, "Learning rate.")
+tf.app.flags.DEFINE_float("learning_rate", 0.006, "Learning rate.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 10.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
 tf.app.flags.DEFINE_integer("batch_size", 5, "Batch size to use during training.")
@@ -67,10 +67,6 @@ def main(_):
         json.dump(FLAGS.__flags, fout)
 
     with tf.Session() as sess:
-        if FLAGS.tb is True:
-            tensorboard_path = os.path.join(FLAGS.log_dir, "tensorboard")        
-            file_writer = tf.summary.FileWriter(tensorboard_path, sess.graph)
-
         load_train_dir = get_normalized_train_dir(FLAGS.load_train_dir or FLAGS.train_dir)
         initialize_model(sess, qa, load_train_dir)
 
