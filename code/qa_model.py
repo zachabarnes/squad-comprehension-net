@@ -565,9 +565,7 @@ class QASystem(object):
 
         tr, loss, lr, norm = session.run(output_feed, input_feed)
 
-        print(norm)
-
-        return loss, lr
+        return loss, lr , norm
 
     def get_batch(self, dataset):
         return random.sample(dataset, self.FLAGS.batch_size)
@@ -628,14 +626,14 @@ class QASystem(object):
                 #while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
                 #    (q, q_mask, p, p_mask, span) = random.choice(train_data)
 
-                loss, lr = self.optimize(session, batch)
+                loss, lr, norm = self.optimize(session, batch)
                 losses.append(loss)
 
                 if i % self.FLAGS.print_every == 0 or i == 0 or i==num_data:
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                     sys.stdout.write('\r')
-                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d) Learning rate: %f" % (cur_epoch + 1, mean_loss,'='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr))
+                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d) [lr: %.2f, norm: %.2f]" % (cur_epoch + 1, mean_loss,'='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr, norm))
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
