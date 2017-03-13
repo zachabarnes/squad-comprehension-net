@@ -419,19 +419,28 @@ class QASystem(object):
             self.paragraph_embedding = tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder)
             self.question_embedding = tf.nn.embedding_lookup(embeddings,self.question_placeholder)
 
-    def decode(self, session, question, paragraph, question_mask, paragraph_mask):  #Currently still decodes one at a time
+    def decode(self, session, qs, ps, q_masks, p_masks):  #Currently still decodes one at a time
         """
         Returns the probability distribution over different positions in the paragraph
         so that other methods like self.answer() will be able to work properly
         :return:
         """
         input_feed = {}
+        '''
         input_feed[self.question_placeholder] = np.reshape(np.array(question), (1,-1))
         input_feed[self.paragraph_placeholder] = np.reshape(np.array(paragraph), (1,-1))
         input_feed[self.paragraph_mask_placeholder] = np.array([paragraph_mask])
         input_feed[self.paragraph_length] = np.sum(list(paragraph_mask))
         input_feed[self.question_length] = np.sum(list(question_mask))
-        input_feed[self.cell_initial_placeholder] = np.zeros((self.FLAGS.batch_size, self.FLAGS.state_size))
+        input_feed[self.cell_initial_placeholder] = np.zeros((1, self.FLAGS.state_size))
+        '''
+
+        input_feed[self.question_placeholder] = np.array(list(qs))
+        input_feed[self.paragraph_placeholder] = np.array(list(ps))
+        input_feed[self.paragraph_mask_placeholder] = np.array(list(p_masks))
+        input_feed[self.paragraph_length] = np.sum(list(p_masks), axis = 1)   # Sum and make into a list
+        input_feed[self.question_length] = np.sum(list(q_masks), axis = 1)    # Sum and make into a list
+        input_feed[self.cell_initial_placeholder] = np.zeros((1, self.FLAGS.state_size))
 
         output_feed = [self.Beta_s, self.Beta_e]    # Get the softmaxed outputs
 
@@ -441,7 +450,7 @@ class QASystem(object):
 
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
 
-        B_s, B_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
+        B_s, B_e = self.decode(session, [question], [paragraph], [question_mask], [paragraph_mask])
 
         a_s = np.argmax(B_s, axis=1)
         a_e = np.argmax(B_e, axis=1)
@@ -579,7 +588,7 @@ class QASystem(object):
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
         #num_data = len(train_data)
-        num_data = 100
+        num_data = self.FLAGS.data_set_size
 
         #Make small data set for small sample training
         small_data = random.sample(train_data, num_data)
