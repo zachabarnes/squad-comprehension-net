@@ -454,7 +454,7 @@ class QASystem(object):
 
         a_s = np.argmax(B_s, axis=1)
         a_e = np.argmax(B_e, axis=1)
-        print a_s, a_e
+        print (a_s, a_e)
 
         return a_s[0], a_e[0], B_s[0], B_e[0]
 
