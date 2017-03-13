@@ -38,13 +38,27 @@ class MatchLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
     """
     Extension of LSTM cell to do matching and magic. Designed to be fed to dynammic_rnn
     """
-    def __init__(self, hidden_size, HQ, term1, mats, vecs, FLAGS):
+    def __init__(self, hidden_size, HQ, FLAGS):
+         # Uniform distribution, as opposed to xavier, which is normal
         self.HQ = HQ
-        self.term1 = term1
         self.hidden_size = hidden_size
         self.FLAGS = FLAGS
-        self.mats = mats
-        self.vecs = vecs
+
+        l, P, Q = self.hidden_size, self.FLAGS.max_paragraph_size, self.FLAGS.max_question_size
+        self.WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) 
+        self.WP = tf.get_variable("WP", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
+        self.WR = tf.get_variable("WR", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
+
+        self.bP = tf.Variable(tf.zeros([1, l]))
+        self.w = tf.Variable(tf.zeros([l,1])) 
+        self.b = tf.Variable(tf.zeros([1,1]))
+
+        # Calculate term1 by resphapeing to l
+        HQ_shaped = tf.reshape(HQ, [-1, l])
+        term1 = tf.matmul(HQ_shaped, self.WQ)
+        term1 = tf.reshape(term1, [-1, Q, l])
+        self.term1 = term1
+
         super(MatchLSTMCell, self).__init__(hidden_size)
 
     def __call__(self, inputs, state, scope = None):
@@ -55,8 +69,8 @@ class MatchLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
         
         #For naming convention load in from self the params and rename
         term1 = self.term1
-        WQ, WP, WR = self.mats
-        bP, w, b = self.vecs
+        WQ, WP, WR = self.WQ, self.WP, self.WR
+        bP, w, b = self.bP, self.w, self.b
         l, P, Q = self.hidden_size, self.FLAGS.max_paragraph_size, self.FLAGS.max_question_size
         HQ = self.HQ
         hr = state[1]
@@ -192,37 +206,38 @@ class Encoder(object):
         Q = self.FLAGS.max_question_size
         P = self.FLAGS.max_paragraph_size
 
-        # Uniform distribution, as opposed to xavier, which is normal
-        WQ = tf.get_variable("WQ", [l,l], initializer=tf.contrib.layers.xavier_initializer())
-        WP = tf.get_variable("WP", [l,l], initializer=tf.contrib.layers.xavier_initializer())
-        WR = tf.get_variable("WR", [l,l], initializer=tf.contrib.layers.xavier_initializer())
+        # # Uniform distribution, as opposed to xavier, which is normal
+        # WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) 
+        # WP = tf.get_variable("WP", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
+        # WR = tf.get_variable("WR", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
 
-        bP = tf.Variable(tf.zeros([1, l]))
-        w = tf.Variable(tf.zeros([l,1])) 
-        b = tf.Variable(tf.zeros([1,1]))
+        # bP = tf.Variable(tf.zeros([1, l]))
+        # w = tf.Variable(tf.zeros([l,1])) 
+        # b = tf.Variable(tf.zeros([1,1]))
 
-        # Calculate term1 by resphapeing to l
-        HQ_shaped = tf.reshape(HQ, [-1, l])
-        term1 = tf.matmul(HQ_shaped, WQ)
-        term1 = tf.reshape(term1, [-1, Q, l])
+        # # Calculate term1 by resphapeing to l
+        # HQ_shaped = tf.reshape(HQ, [-1, l])
+        # term1 = tf.matmul(HQ_shaped, WQ)
+        # term1 = tf.reshape(term1, [-1, Q, l])
 
         # Initialize forward and backward matching LSTMcells with same matching params
         with tf.variable_scope("forward"):
-            cell_f = MatchLSTMCell(l, HQ, term1, (WQ, WP, WR), (bP, w, b), self.FLAGS) 
+            cell_f = MatchLSTMCell(l, HQ, self.FLAGS) 
         with tf.variable_scope("backward"):
-            cell_b = MatchLSTMCell(l, HQ, term1, (WQ, WP, WR), (bP, w, b), self.FLAGS)
+            cell_b = MatchLSTMCell(l, HQ, self.FLAGS)
 
         # Calculate encodings for both forward and backward directions
         
         #paragraph_length = tf.reshape(paragraph_length, [-1, 1])
         #assert(paragraph_length.get_shape() == (None, 1))
-        print(paragraph_length)
+        #print(paragraph_length)
         (HR_right, HR_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_f, cell_b, HP, sequence_length = paragraph_length, dtype = tf.float32)
         
         ### Append the two things calculated above into H^R
         HR = tf.concat(2,[HR_right, HR_left])
         assert HR.get_shape().as_list() == [None, P, 2*l]
-        print("HR dims: " + str(HR.get_shape().as_list()))
+        
+        #print("HR dims: " + str(HR.get_shape().as_list()))
         return HR
 
 class Decoder(object):
@@ -368,7 +383,7 @@ class QASystem(object):
         grads = [g for g, v in grads_and_vars]
         variables = [v for g, v in grads_and_vars]
 
-        clipped_grads, global_norm = tf.clip_by_global_norm(grads, self.FLAGS.max_gradient_norm)
+        clipped_grads, self.global_norm = tf.clip_by_global_norm(grads, self.FLAGS.max_gradient_norm)
         self.train_op = optimizer.apply_gradients(zip(clipped_grads, variables), global_step = self.global_step, name = "apply_clipped_grads")
 
         self.saver = tf.train.Saver(tf.global_variables())
@@ -557,10 +572,11 @@ class QASystem(object):
         output_feed.append(self.train_op)
         output_feed.append(self.loss)
         output_feed.append(self.decayed_rate)
+        output_feed.append(self.global_norm)
 
-        _, loss, lr = session.run(output_feed, input_feed)
+        tr, loss, lr, norm = session.run(output_feed, input_feed)
 
-        return loss, lr
+        return loss, lr , norm
 
     def get_batch(self, dataset):
         return random.sample(dataset, self.FLAGS.batch_size)
@@ -621,14 +637,14 @@ class QASystem(object):
                 #while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
                 #    (q, q_mask, p, p_mask, span) = random.choice(train_data)
 
-                loss, lr = self.optimize(session, batch)
+                loss, lr, norm = self.optimize(session, batch)
                 losses.append(loss)
 
                 if i % self.FLAGS.print_every == 0 or i == 0 or i==num_data:
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                     sys.stdout.write('\r')
-                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d) Learning rate: %f" % (cur_epoch + 1, mean_loss,'='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr))
+                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d) [lr: %.2f, norm: %.2f]" % (cur_epoch + 1, mean_loss,'='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr, norm))
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
