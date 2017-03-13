@@ -280,7 +280,7 @@ class QASystem(object):
 
         # ==== set up training/updating procedure ==
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
-        self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 1000, decay_rate = 0.99, staircase=False)
+        self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 1000, decay_rate = 0.95, staircase=True)
         optimizer = opt_function(self.decayed_rate)
 
         grads_and_vars = optimizer.compute_gradients(self.loss, tf.trainable_variables())
@@ -542,7 +542,7 @@ class QASystem(object):
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                     sys.stdout.write('\r')
-                    sys.stdout.write("EPOCH: %d ==> (Avg Loss:%.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [lr: %.4f, norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr, norm))
+                    sys.stdout.write("EPOCH: %d ==> (Avg Loss: %.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [lr: %.4f, norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr, norm))
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
