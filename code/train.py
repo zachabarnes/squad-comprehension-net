@@ -37,6 +37,7 @@ tf.app.flags.DEFINE_string("embed_path", "", "Path to the trimmed GLoVe embeddin
 tf.app.flags.DEFINE_integer("max_paragraph_size", 300, "The length to cut paragraphs off at")   # As per Frank's histogram
 tf.app.flags.DEFINE_integer("max_question_size", 20, "The length to cut question off at")   # As per Frank's histogram
 tf.app.flags.DEFINE_integer("data_set_size", 100, "The dataset size to debug on")   # As per Frank's histogram
+tf.app.flags.DEFINE_integer("eval_size", 10, "The number of examples to evaluate on. Must be less than data_set size")
 
 FLAGS = tf.app.flags.FLAGS
 

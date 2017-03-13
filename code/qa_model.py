@@ -193,9 +193,9 @@ class Encoder(object):
         P = self.FLAGS.max_paragraph_size
 
         # Uniform distribution, as opposed to xavier, which is normal
-        WQ = tf.get_variable("WQ", [l,l], initializer=tf.tf.contrib.layers.xavier_initializer()(1.0)) 
-        WP = tf.get_variable("WP", [l,l], initializer=tf.tf.contrib.layers.xavier_initializer()(1.0))
-        WR = tf.get_variable("WR", [l,l], initializer=tf.tf.contrib.layers.xavier_initializer()(1.0))
+        WQ = tf.get_variable("WQ", [l,l], initializer=tf.contrib.layers.xavier_initializer())
+        WP = tf.get_variable("WP", [l,l], initializer=tf.contrib.layers.xavier_initializer())
+        WR = tf.get_variable("WR", [l,l], initializer=tf.contrib.layers.xavier_initializer())
 
         bP = tf.Variable(tf.zeros([1, l]))
         w = tf.Variable(tf.zeros([l,1])) 
@@ -339,7 +339,7 @@ class QASystem(object):
         self.paragraph_length = tf.placeholder(tf.int32, (None), name="paragraph_length")
         self.question_length = tf.placeholder(tf.int32, (None), name="question_length")
         self.cell_initial_placeholder = tf.placeholder(tf.float32, (None, self.FLAGS.state_size), name="cell_init")
-        self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
+        #self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
         # ==== set up placeholder tokens ======== 2d
         # self.paragraph_placeholder = tf.placeholder(tf.int32, (self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
@@ -359,7 +359,8 @@ class QASystem(object):
 
         # ==== set up training/updating procedure ==
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
-        optimizer = opt_function(self.learning_rate)
+        self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 1000, decay_rate = 0.96, staircase=False)
+        optimizer = opt_function(self.decayed_rate)
 
         grads_and_vars = optimizer.compute_gradients(self.loss, tf.trainable_variables())
 
@@ -536,17 +537,18 @@ class QASystem(object):
         input_feed[self.paragraph_mask_placeholder] = np.array(list(train_p_masks))
         input_feed[self.paragraph_length] = np.sum(list(train_p_masks), axis = 1)   # Sum and make into a list
         input_feed[self.question_length] = np.sum(list(train_q_masks), axis = 1)    # Sum and make into a list
-        input_feed[self.dropout_placeholder] = self.FLAGS.dropout
+        #input_feed[self.dropout_placeholder] = self.FLAGS.dropout
         input_feed[self.cell_initial_placeholder] = np.zeros((self.FLAGS.batch_size, self.FLAGS.state_size))
 
         output_feed = []
 
         output_feed.append(self.train_op)
         output_feed.append(self.loss)
+        output_feed.append(self.decayed_rate)
 
-        _, loss = session.run(output_feed, input_feed)
+        _, loss, lr = session.run(output_feed, input_feed)
 
-        return loss
+        return loss, lr
 
     def get_batch(self, dataset):
         return random.sample(dataset, self.FLAGS.batch_size)
@@ -603,19 +605,18 @@ class QASystem(object):
 
             losses = []
             for i in range(int(math.ceil(num_data/self.FLAGS.batch_size))):
-                #(q, q_mask, p, p_mask, span, answ) = random.choice(small_data)
                 batch = self.get_batch(small_data)
                 #while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
                 #    (q, q_mask, p, p_mask, span) = random.choice(train_data)
 
-                loss = self.optimize(session, batch)
+                loss, lr = self.optimize(session, batch)
                 losses.append(loss)
 
                 if i % self.FLAGS.print_every == 0 or i == 0 or i==num_data:
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                     sys.stdout.write('\r')
-                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d)" % (cur_epoch + 1, mean_loss,'='*num_complete, (i+1)*self.FLAGS.batch_size, num_data))
+                    sys.stdout.write("EPOCH: %d ==> (Loss:%f) [%-20s] (Completion:%d/%d) Learning rate: %f" % (cur_epoch + 1, mean_loss,'='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr))
                     sys.stdout.flush()
             sys.stdout.write('\n')
 
