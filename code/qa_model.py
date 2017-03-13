@@ -375,7 +375,7 @@ class QASystem(object):
 
         # ==== set up training/updating procedure ==
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
-        self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 1000, decay_rate = 0.99, staircase=False)
+        self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 1000, decay_rate = 0.96, staircase=False)
         optimizer = opt_function(self.decayed_rate)
 
         grads_and_vars = optimizer.compute_gradients(self.loss, tf.trainable_variables())
