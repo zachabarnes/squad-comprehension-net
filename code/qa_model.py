@@ -212,6 +212,10 @@ class Encoder(object):
             cell_b = MatchLSTMCell(l, HQ, term1, (WQ, WP, WR), (bP, w, b), self.FLAGS)
 
         # Calculate encodings for both forward and backward directions
+        
+        paragraph_length = tf.reshape(paragraph_length, [-1, 1])
+        #assert(paragraph_length.get_shape() == (None, 1))
+        print(paragraph_length)
         (HR_right, HR_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_f, cell_b, HP, sequence_length = paragraph_length, dtype = tf.float32)
         
         ### Append the two things calculated above into H^R
@@ -301,10 +305,10 @@ class Decoder(object):
             hk, cell_state = cell(cell_input, cell_state)
 
             #Save a 2D rep of Beta as output
-            preds[i] = beta_term    # TODO: Do we want beta? Or beta_term?   Beta would be softmaxed twice by this
+            preds[i] = tf.squeeze(beta_term)    # TODO: Do we want beta? Or beta_term?   Beta would be softmaxed twice by this
 
-        print("Beta_s Dims:" + str(preds[0].get_shape().as_list()))
-        print("Beta_e Dims:" + str(preds[1].get_shape().as_list()))
+        #print("Beta_s Dims:" + str(preds[0].get_shape().as_list()))
+        #print("Beta_e Dims:" + str(preds[1].get_shape().as_list()))
         return tuple(preds) # Bs, Be [batchsize, paragraph_length]
 
 
@@ -328,9 +332,9 @@ class QASystem(object):
         # # ==== set up placeholder tokens ======== 3d (because of batching)
         self.paragraph_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_paragraph_size), name="paragraph_placeholder")
         self.question_placeholder = tf.placeholder(tf.int32, (None, self.FLAGS.max_question_size), name="question_placeholder")
-        self.start_answer_placeholder = tf.placeholder(tf.int32, (self.FLAGS.batch_size), name="start_answer_placeholder")
-        self.end_answer_placeholder = tf.placeholder(tf.int32, (self.FLAGS.batch_size), name="end_answer_placeholder")
-        self.paragraph_mask_placeholder = tf.placeholder(tf.bool, (None, self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
+        self.start_answer_placeholder = tf.placeholder(tf.int32, (None), name="start_answer_placeholder")
+        self.end_answer_placeholder = tf.placeholder(tf.int32, (None), name="end_answer_placeholder")
+        self.paragraph_mask_placeholder = tf.placeholder(tf.float32, (None, self.FLAGS.max_paragraph_size), name="paragraph_mask_placeholder")
         self.paragraph_length = tf.placeholder(tf.int32, (None), name="paragraph_length")
         self.question_length = tf.placeholder(tf.int32, (None), name="question_length")
         self.cell_initial_placeholder = tf.placeholder(tf.float32, (None, self.FLAGS.state_size), name="cell_init")
@@ -376,8 +380,8 @@ class QASystem(object):
         """
         Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length)
         ps, pe = self.decoder.decode(Hr, self.paragraph_mask_placeholder, self.cell_initial_placeholder)
-        self.pred_s = tf.boolean_mask(ps, self.paragraph_mask_placeholder)     # For loss
-        self.pred_e = tf.boolean_mask(pe, self.paragraph_mask_placeholder)     # For loss
+        self.pred_s = ps * self.paragraph_mask_placeholder      # MASKING
+        self.pred_e = pe * self.paragraph_mask_placeholder      # MASKING
         self.Beta_s = tf.nn.softmax(self.pred_s)   # For decode
         self.Beta_e = tf.nn.softmax(self.pred_e)   # For decode
 
@@ -391,16 +395,16 @@ class QASystem(object):
         # to be -log(Beta_1_i * Beta_2_j) where i is the actual start token, and j is the actual end token.
         '''
         with vs.variable_scope("loss"):
-            p = self.Beta_s[:,self.start_answer_placeholder] * self.Beta_e[:,self.end_answer_placeholder]   #First column is for batches?
+            p = self.Beta_s[self.start_answer_placeholder] * self.Beta_e[self.end_answer_placeholder]   #First column is for batches?
             self.loss = -tf.reduce_sum(tf.log(p))
-        '''
+        
         # I think that these losses are equivalent
+        '''
         with vs.variable_scope("loss"):
-            print(self.pred_s, self.start_answer_placeholder)
-            print(self.pred_e, self.end_answer_placeholder)
             l1 = sparse_softmax_cross_entropy_with_logits(self.pred_s, self.start_answer_placeholder)
             l2 = sparse_softmax_cross_entropy_with_logits(self.pred_e, self.end_answer_placeholder)
-            self.loss = l1 + l2
+            self.loss = tf.reduce_mean(l1 + l2)
+        
 
     def setup_embeddings(self):
         """
@@ -414,18 +418,19 @@ class QASystem(object):
             self.paragraph_embedding = tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder)
             self.question_embedding = tf.nn.embedding_lookup(embeddings,self.question_placeholder)
 
-    def decode(self, session, question, paragraph, question_mask, paragraph_mask):
+    def decode(self, session, question, paragraph, question_mask, paragraph_mask):  #Currently still decodes one at a time
         """
         Returns the probability distribution over different positions in the paragraph
         so that other methods like self.answer() will be able to work properly
         :return:
         """
         input_feed = {}
-        input_feed[self.question_placeholder] = np.array(question)
-        input_feed[self.paragraph_placeholder] = np.array(paragraph)
-        input_feed[self.paragraph_mask_placeholder] = np.array(paragraph_mask).T
-        input_feed[self.paragraph_length] = np.reshape(np.sum(paragraph_mask),[-1])   # Sum and make into a list
-        input_feed[self.question_length] = np.reshape(np.sum(question_mask),[-1])    # Sum and make into a list
+        input_feed[self.question_placeholder] = np.array([question])
+        input_feed[self.paragraph_placeholder] = np.array([paragraph])
+        input_feed[self.paragraph_mask_placeholder] = np.array([paragraph_mask])
+        input_feed[self.paragraph_length] = np.sum(list(paragraph_mask))
+        input_feed[self.question_length] = np.sum(list(question_mask))
+        input_feed[self.cell_initial_placeholder] = np.zeros((self.FLAGS.batch_size, self.FLAGS.state_size))
 
         output_feed = [self.Beta_s, self.Beta_e]    # Get the softmaxed outputs
 
@@ -512,7 +517,6 @@ class QASystem(object):
 
         start_answers = [train_span[0] for train_span in list(train_spans)]
         end_answers = [train_span[1] for train_span in list(train_spans)]
-        print (np.expand_dims(np.array(start_answers), axis=0))
 
         input_feed[self.question_placeholder] = np.array(list(train_qs))
         input_feed[self.paragraph_placeholder] = np.array(list(train_ps))
