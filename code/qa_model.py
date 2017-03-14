@@ -457,16 +457,16 @@ class QASystem(object):
         output_feed.append(self.loss)
         #output_feed.append(self.decayed_rate)
         output_feed.append(self.global_norm)
+        output_feed.append(self.global_step)
         
         if self.FLAGS.tb is True:
-            output_feed.append(self.global_step)
             output_feed.append(self.tb_vars)
             tr, loss, norm, step, summary = session.run(output_feed, input_feed)
             self.tensorboard_writer.add_summary(summary, step)
         else:
-            tr, loss, norm = session.run(output_feed, input_feed) 
+            tr, loss, norm, step = session.run(output_feed, input_feed) 
 
-        return loss, norm
+        return loss, norm, step
 
     def get_batch(self, dataset):
         batch = random.sample(dataset, self.FLAGS.batch_size)
@@ -541,7 +541,7 @@ class QASystem(object):
             for i in range(int(math.ceil(num_data/self.FLAGS.batch_size))):
                 batch = self.get_batch(train_data)
 
-                loss, norm = self.optimize(session, batch)
+                loss, norm, step = self.optimize(session, batch)
                 losses.append(loss)
 
                 if i % self.FLAGS.print_every == 0 or i == 0 or i==num_data:
@@ -556,10 +556,10 @@ class QASystem(object):
             self.evaluate_answer(session, train_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
 
             #Save model after each epoch
-            checkpoint_path = os.path.join(train_dir, model_name, start_time,"model.ckpt")
+            checkpoint_path = os.path.join(train_dir, model_name, start_time)
             if not os.path.exists(checkpoint_path):
                 os.makedirs(checkpoint_path)
-            save_path = saver.save(session, checkpoint_path)
+            save_path = saver.save(session, os.path.join(checkpoint_path, "model.ckpt"), step)
             print("Model saved in file: %s" % save_path)
 
 

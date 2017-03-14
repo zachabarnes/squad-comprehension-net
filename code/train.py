@@ -67,11 +67,13 @@ def main(_):
         json.dump(FLAGS.__flags, fout)
 
     with tf.Session() as sess:
-        #load_train_dir = get_normalized_train_dir(FLAGS.load_train_dir or FLAGS.train_dir)
-        load_train_dir = FLAGS.load_train_dir or FLAGS.train_dir
+        load_train_dir = get_normalized_train_dir(FLAGS.load_train_dir or FLAGS.train_dir)
+        #load_train_dir = FLAGS.load_train_dir or FLAGS.train_dir
+        print ("load_train_dir: ", load_train_dir)
         initialize_model(sess, qa, load_train_dir)
 
         save_train_dir = get_normalized_train_dir(FLAGS.train_dir)
+        print ("save_train_dir: ", save_train_dir)
         qa.train(sess, dataset, save_train_dir, rev_vocab)
 
 if __name__ == "__main__":
