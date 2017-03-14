@@ -281,9 +281,9 @@ class QASystem(object):
 
         # ==== set up training/updating procedure ==
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
-        self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 1000, decay_rate = 0.95, staircase=True)
-        tf.summary.scalar("learning_rate", self.decayed_rate)
-        optimizer = opt_function(self.decayed_rate)
+        #self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 1000, decay_rate = 0.95, staircase=True)
+        tf.summary.scalar("learning_rate", self.learning_rate)
+        optimizer = opt_function(self.learning_rate)
 
         grads_and_vars = optimizer.compute_gradients(self.loss, tf.trainable_variables())
 
@@ -396,12 +396,7 @@ class QASystem(object):
         for question, question_mask, paragraph, paragraph_mask, span, true_answer in random.sample(dataset, sample):
             a_s, a_e, B_s, B_e = self.answer(session, question, paragraph, question_mask, paragraph_mask)
             token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
-            '''
-            print("Start guess: ", a_s, "\tActual Start: ", span[0])
-            print("End guess: ", a_e, "\tActual End: ", span[1])
-            print("Token Answer:\t", token_answer)
-            print("B_s:\t", B_s)
-            '''
+
             sentence = []
             for token in token_answer:
                 word = rev_vocab[token]
