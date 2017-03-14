@@ -64,7 +64,7 @@ def process_glove(args, vocab_list, save_path, size=4e5, random_init=True):
     :return:
     """
     if not gfile.Exists(save_path + ".npz"):
-        glove_path = os.path.join(args.glove_dir, "glove.6B.{}d.txt".format(args.glove_dim))
+        glove_path = os.path.join(args.glove_dir, "glove.42B.{}d.txt".format(args.glove_dim))
         if random_init:
             glove = np.random.randn(len(vocab_list), args.glove_dim)
         else:
