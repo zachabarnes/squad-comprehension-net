@@ -455,18 +455,18 @@ class QASystem(object):
 
         output_feed.append(self.train_op)
         output_feed.append(self.loss)
-        output_feed.append(self.decayed_rate)
+        #output_feed.append(self.decayed_rate)
         output_feed.append(self.global_norm)
         
         if self.FLAGS.tb is True:
             output_feed.append(self.global_step)
             output_feed.append(self.tb_vars)
-            tr, loss, lr, norm, step, summary = session.run(output_feed, input_feed)
+            tr, loss, norm, step, summary = session.run(output_feed, input_feed)
             self.tensorboard_writer.add_summary(summary, step)
         else:
-            tr, loss, lr, norm = session.run(output_feed, input_feed) 
+            tr, loss, norm = session.run(output_feed, input_feed) 
 
-        return loss, lr , norm
+        return loss, norm
 
     def get_batch(self, dataset):
         batch = random.sample(dataset, self.FLAGS.batch_size)
@@ -541,14 +541,14 @@ class QASystem(object):
             for i in range(int(math.ceil(num_data/self.FLAGS.batch_size))):
                 batch = self.get_batch(train_data)
 
-                loss, lr, norm = self.optimize(session, batch)
+                loss, norm = self.optimize(session, batch)
                 losses.append(loss)
 
                 if i % self.FLAGS.print_every == 0 or i == 0 or i==num_data:
                     mean_loss = sum(losses)/(len(losses) + 10**-7)
                     num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                     sys.stdout.write('\r')
-                    sys.stdout.write("EPOCH: %d ==> (Avg Loss: %.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [lr: %.4f, norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, lr, norm))
+                    sys.stdout.write("EPOCH: %d ==> (Avg Loss: %.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm))
                     sys.stdout.flush()
 
             sys.stdout.write('\n')
