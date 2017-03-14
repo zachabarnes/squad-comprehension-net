@@ -517,23 +517,9 @@ class QASystem(object):
         model_name = "match-lstm"
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
-        
+        dev_data = zip(dataset["val_questions"], dataset["val_questions_mask"], dataset["val_context"], dataset["val_context_mask"], dataset["val_span"], dataset["val_answer"])
+
         num_data = len(train_data)
-
-        '''
-        if self.FLAGS.data_set_size is 0:
-            num_data = len(train_data)
-        else:
-            num_data = self.FLAGS.data_set_size
-
-        #Make small data set for small sample training
-
-        small_data = random.sample(train_data, num_data)
-        for i, (q, q_mask, p, p_mask, span, answ) in enumerate(small_data):
-            while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
-                (q, q_mask, p, p_mask, span, answ) = random.choice(train_data)
-                small_data[i] = (q, q_mask, p, p_mask, span, answ)
-        '''
 
         # Normal training loop
         for cur_epoch in range(self.FLAGS.epochs):
@@ -552,8 +538,12 @@ class QASystem(object):
                     sys.stdout.flush()
 
             sys.stdout.write('\n')
-
+            
+            logging.info("---------- Evaluating on Train Set ----------")
             self.evaluate_answer(session, train_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
+            logging.info("---------- Evaluating on Dev Set ------------")
+            self.evaluate_answer(session, dev_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
+
 
             #Save model after each epoch
             checkpoint_path = os.path.join(train_dir, model_name, start_time)
