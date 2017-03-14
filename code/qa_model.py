@@ -371,7 +371,14 @@ class QASystem(object):
         a_s = np.argmax(B_s)
         a_e = np.argmax(B_e)
 
-        return a_s, a_e, B_s, B_e
+        #Force a_e to be after a_s.
+        if a_e < a_s:
+            if np.max(B_s) > np.max(B_e):   #Move a_e to a_s b/c a_s has a higher probability
+                a_e = a_s
+            else:                           #Move a_s to a_e b/c a_e has a higher probability
+                a_s = a_e
+
+        return a_s, a_e
 
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
@@ -390,11 +397,10 @@ class QASystem(object):
         :return:
         """
         
-        #sample_dataset = random.sample(zip(dataset["val_questions"], dataset["val_context"], dataset["val_answer"]), sample)
         our_answers = []
         their_answers = []
         for question, question_mask, paragraph, paragraph_mask, span, true_answer in random.sample(dataset, sample):
-            a_s, a_e, B_s, B_e = self.answer(session, question, paragraph, question_mask, paragraph_mask)
+            a_s, a_e = self.answer(session, question, paragraph, question_mask, paragraph_mask)
             token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
 
             sentence = []
@@ -406,7 +412,6 @@ class QASystem(object):
             our_answers.append(our_answer)
             their_answer = ' '.join(word for word in true_answer)
             their_answers.append(their_answer)
-            #print(their_answer, "\t", our_answer)
 
         f1 = exact_match = total = 0
         answer_tuples = zip(their_answers, our_answers)

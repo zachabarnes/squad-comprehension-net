@@ -37,8 +37,8 @@ tf.app.flags.DEFINE_string("log_dir", "log", "Path to store log and flag files (
 tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab file (default: ./data/squad/vocab.dat)")
 tf.app.flags.DEFINE_string("embed_path", "", "Path to the trimmed GLoVe embedding (default: ./data/squad/glove.trimmed.{embedding_size}.npz)")
 tf.app.flags.DEFINE_string("dev_path", "data/squad/dev-v1.1.json", "Path to the JSON dev set to evaluate against (default: ./data/squad/dev-v1.1.json)")
-tf.app.flags.DEFINE_integer("max_paragraph_size", 300, "The length to cut paragraphs off at")   # As per Frank's histogram
-tf.app.flags.DEFINE_integer("max_question_size", 20, "The length to cut question off at")   # As per Frank's histogram
+tf.app.flags.DEFINE_integer("max_paragraph_size", 300, "The length to cut paragraphs off at. MUST be the same as the model.")   # As per Frank's histogram.
+tf.app.flags.DEFINE_integer("max_question_size", 20, "The length to cut question off at. MUST be the same as the model.")   # As per Frank's histogram
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -107,11 +107,16 @@ def generate_answers(sess, model, dataset, rev_vocab):
     :param rev_vocab: this is a list of vocabulary that maps index to actual words
     :return:
     """
-    unified_dataset = zip(dataset["val_questions"], dataset["val_context"], dataset["val_question_uuids"])
+    questions_padded, questions_masked = pad_inputs(dataset["val_questions"], max_length)
+    context_padded, context_masked = pad_inputs(dataset["val_context"], max_length)
+
+    unified_dataset = zip(questions_padded, questions_masked, context_padded, context_masked, dataset["val_question_uuids"])
+
     answers = {}
 
-    for question, context, uuid in unified_dataset:
-        token_answer = model.answer(sess, question, context)
+    for question, question_mask, paragraph, paragraph_mask, uuid in unified_dataset:
+        a_s, a_e = model.answer(sess, question, paragraph, question_mask, paragraph_mask)
+        token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
         sentence = []
         for token in token_answer:
             word = rev_vocab[token]
@@ -155,7 +160,11 @@ def main(_):
 
     with tf.Session() as sess:
         train_dir = get_normalized_train_dir(FLAGS.train_dir)
+
+        train_dir = FLAGS.train_dir
+        print ("train_dir: ", train_dir)
         initialize_model(sess, qa, train_dir)
+
         answers = generate_answers(sess, qa, dataset, rev_vocab)
 
         # write to json file to root dir
