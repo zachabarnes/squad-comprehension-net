@@ -109,8 +109,8 @@ def generate_answers(sess, model, dataset, rev_vocab):
     :param rev_vocab: this is a list of vocabulary that maps index to actual words
     :return:
     """
-    questions_padded, questions_masked = pad_inputs(dataset["val_questions"], max_length)
-    context_padded, context_masked = pad_inputs(dataset["val_context"], max_length)
+    questions_padded, questions_masked = pad_inputs(dataset["val_questions"], FLAGS.max_question_size)
+    context_padded, context_masked = pad_inputs(dataset["val_context"], FLAGS.max_paragraph_size)
 
     unified_dataset = zip(questions_padded, questions_masked, context_padded, context_masked, dataset["val_question_uuids"])
 
