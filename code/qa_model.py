@@ -540,12 +540,11 @@ class QASystem(object):
                 loss, norm, step = self.optimize(session, batch)
                 losses[step % rolling_ave_window] = loss
 
-                if i % self.FLAGS.print_every == 0 or i == 0 or i==num_data:
-                    mean_loss = np.mean(losses)
-                    num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
-                    sys.stdout.write('\r')
-                    sys.stdout.write("EPOCH: %d ==> (Rolling Ave Loss: %.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm))
-                    sys.stdout.flush()
+                mean_loss = np.mean(losses)
+                num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
+                sys.stdout.write('\r')
+                sys.stdout.write("EPOCH: %d ==> (Rolling Ave Loss: %.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm))
+                sys.stdout.flush()
 
             sys.stdout.write('\n')
             
