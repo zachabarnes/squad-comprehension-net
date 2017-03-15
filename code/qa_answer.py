@@ -40,7 +40,6 @@ tf.app.flags.DEFINE_string("dev_path", "data/squad/dev-v1.1.json", "Path to the 
 tf.app.flags.DEFINE_integer("max_paragraph_size", 300, "The length to cut paragraphs off at. MUST be the same as the model.")   # As per Frank's histogram.
 tf.app.flags.DEFINE_integer("max_question_size", 20, "The length to cut question off at. MUST be the same as the model.")   # As per Frank's histogram
 tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
-tf.app.flags.DEFINE_float("learning_rate", 0.001, "Learning rate.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 10.0, "Clip gradients to this norm.")
 
 FLAGS = tf.app.flags.FLAGS
