@@ -118,10 +118,9 @@ def generate_answers(sess, model, dataset, rev_vocab):
     context_padded, context_masked = pad_inputs(val_context, FLAGS.max_paragraph_size)
 
     unified_dataset = zip(questions_padded, questions_masked, context_padded, context_masked, dataset["val_question_uuids"])
-
     answers = {}
 
-    for question, question_mask, paragraph, paragraph_mask, uuid in unified_dataset:
+    for question, question_mask, paragraph, paragraph_mask, uuid in tqdm(unified_dataset):
         a_s, a_e = model.answer(sess, question, paragraph, question_mask, paragraph_mask)
         token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
         sentence = []
