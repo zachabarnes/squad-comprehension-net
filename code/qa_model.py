@@ -166,8 +166,7 @@ class Encoder(object):
         return HR
 
 class Decoder(object):
-    def __init__(self, output_size, FLAGS):
-        self.output_size = output_size
+    def __init__(self, FLAGS):
         self.FLAGS = FLAGS
 
     def decode(self, knowledge_rep, paragraph_mask, cell_init): 
