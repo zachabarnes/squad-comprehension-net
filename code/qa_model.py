@@ -526,20 +526,23 @@ class QASystem(object):
 
         num_data = len(train_data)
 
+        best_f1 = 0
+
         # Normal training loop
+        rolling_ave_window = 20
+        losses = [0]*rolling_ave_window
         for cur_epoch in range(self.FLAGS.epochs):
-            losses = []
             for i in range(int(math.ceil(num_data/self.FLAGS.batch_size))):
                 batch = self.get_batch(train_data)
 
                 loss, norm, step = self.optimize(session, batch)
-                losses.append(loss)
+                losses[step % rolling_ave_window] = loss
 
                 if i % self.FLAGS.print_every == 0 or i == 0 or i==num_data:
-                    mean_loss = sum(losses)/(len(losses) + 10**-7)
+                    mean_loss = np.mean(losses)
                     num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                     sys.stdout.write('\r')
-                    sys.stdout.write("EPOCH: %d ==> (Avg Loss: %.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm))
+                    sys.stdout.write("EPOCH: %d ==> (Rolling Ave Loss: %.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm))
                     sys.stdout.flush()
 
             sys.stdout.write('\n')
@@ -547,14 +550,22 @@ class QASystem(object):
             logging.info("---------- Evaluating on Train Set ----------")
             self.evaluate_answer(session, train_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
             logging.info("---------- Evaluating on Dev Set ------------")
-            self.evaluate_answer(session, dev_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
-
+            f1, em = self.evaluate_answer(session, dev_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
 
             #Save model after each epoch
             checkpoint_path = os.path.join(train_dir, model_name, start_time)
             if not os.path.exists(checkpoint_path):
                 os.makedirs(checkpoint_path)
             save_path = saver.save(session, os.path.join(checkpoint_path, "model.ckpt"), step)
-            print("Model saved in file: %s" % save_path)
+            print("Model checkpoint saved in file: %s" % save_path)
+
+            # Save best model based on F1 (Early Stopping)
+            if f1 > best_f1:
+                best_f1 = f1
+                early_stopping_path = os.path.join(checkpoint_path, "early_stopping")
+                if not os.path.exists(early_stopping_path):
+                    os.makedirs(early_stopping_path)
+                save_path = saver.save(session, os.path.join(early_stopping_path, "best_model.ckpt"))
+                print("New Best F1 Score! Best Model saved in file: %s" % save_path)
 
 
