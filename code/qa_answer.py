@@ -154,12 +154,12 @@ def main(_):
     # You must change the following code to adjust to your model
 
     encoder = Encoder(size=FLAGS.state_size, vocab_dim=FLAGS.embedding_size, FLAGS=FLAGS)
-    decoder = Decoder(output_size=FLAGS.output_size, FLAGS=FLAGS)
+    decoder = Decoder(FLAGS=FLAGS)
 
     qa = QASystem(encoder, decoder, FLAGS)
 
     with tf.Session() as sess:
-        train_dir = get_normalized_train_dir(FLAGS.train_dir)
+        #train_dir = get_normalized_train_dir(FLAGS.train_dir)
 
         train_dir = FLAGS.train_dir
         print ("train_dir: ", train_dir)
