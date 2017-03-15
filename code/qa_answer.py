@@ -18,7 +18,7 @@ from qa_model import Encoder, QASystem, Decoder
 from preprocessing.squad_preprocess import data_from_json, maybe_download, squad_base_url, \
     invert_map, tokenize, token_idx_map
 import qa_data
-from utils import get_dataset, initialize_model, initialize_vocab, get_normalized_train_dir
+from utils import get_dataset, initialize_model, initialize_vocab, get_normalized_train_dir, pad_inputs
 
 import logging
 
