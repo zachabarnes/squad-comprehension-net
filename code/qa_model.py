@@ -125,7 +125,7 @@ class Encoder(object):
         self.vocab_dim = vocab_dim
         self.FLAGS = FLAGS
 
-    def encode(self, input_question, input_paragraph, question_length, paragraph_length, encoder_state_input = None):    # LSTM Preprocessing and Match-LSTM Layers
+    def encode(self, input_question, input_paragraph, question_length, paragraph_length, dropout_rate, encoder_state_input = None):    # LSTM Preprocessing and Match-LSTM Layers
         """
         Description:
         """
@@ -145,6 +145,9 @@ class Encoder(object):
         assert HQ.get_shape().as_list() == [None, self.FLAGS.max_question_size, self.FLAGS.state_size]
         assert HP.get_shape().as_list() == [None, self.FLAGS.max_paragraph_size, self.FLAGS.state_size]
 
+        HQ = tf.nn.dropout(HQ, dropout_rate)    # A dropout rate of 1 indicates no dropout
+        HP = tf.nn.dropout(HP, dropout_rate)
+
         # Encoding params
         l = self.size
         Q = self.FLAGS.max_question_size
@@ -162,7 +165,8 @@ class Encoder(object):
         ### Append the two things calculated above into H^R
         HR = tf.concat(2,[HR_right, HR_left])
         assert HR.get_shape().as_list() == [None, P, 2*l]
-    
+        
+        HR = tf.nn.dropout(HR, dropout_rate)
         return HR
 
 class Decoder(object):
@@ -269,7 +273,7 @@ class QASystem(object):
         self.paragraph_length = tf.placeholder(tf.int32, (None), name="paragraph_length")
         self.question_length = tf.placeholder(tf.int32, (None), name="question_length")
         self.cell_initial_placeholder = tf.placeholder(tf.float32, (None, self.FLAGS.state_size), name="cell_init")
-        #self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
+        self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
 
         # ==== assemble pieces ====
         with tf.variable_scope("qa", initializer=tf.uniform_unit_scaling_initializer(1.0)):
@@ -297,7 +301,7 @@ class QASystem(object):
 
 
     def setup_system(self):
-        Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length)
+        Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length, self.dropout_placeholder)
         self.pred_s, self.pred_e = self.decoder.decode(Hr, self.paragraph_mask_placeholder, self.cell_initial_placeholder)
         
 
@@ -355,6 +359,7 @@ class QASystem(object):
         input_feed[self.paragraph_length] = np.sum(list(p_masks), axis = 1)   # Sum and make into a list
         input_feed[self.question_length] = np.sum(list(q_masks), axis = 1)    # Sum and make into a list
         input_feed[self.cell_initial_placeholder] = np.zeros((1, self.FLAGS.state_size))
+        input_feed[self.dropout_placeholder] = 1
 
         output_feed = [self.Beta_s, self.Beta_e]    # Get the softmaxed outputs
 
@@ -452,7 +457,7 @@ class QASystem(object):
         input_feed[self.paragraph_mask_placeholder] = np.array(list(train_p_masks))
         input_feed[self.paragraph_length] = np.sum(list(train_p_masks), axis = 1)   # Sum and make into a list
         input_feed[self.question_length] = np.sum(list(train_q_masks), axis = 1)    # Sum and make into a list
-        #input_feed[self.dropout_placeholder] = self.FLAGS.dropout
+        input_feed[self.dropout_placeholder] = self.FLAGS.dropout
         input_feed[self.cell_initial_placeholder] = np.zeros((self.FLAGS.batch_size, self.FLAGS.state_size))
 
         output_feed = []
