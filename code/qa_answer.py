@@ -110,10 +110,10 @@ def generate_answers(sess, model, dataset, rev_vocab):
     :return:
     """
 
-    val_questions = dataset["val_questions"]
-    val_context = dataset["val_context"]
-    print(val_questions[0])
-    print(val_context[0])
+    val_questions = map(int, dataset["val_questions"])
+    val_context = map(int, dataset["val_context"])
+    #print(val_questions[0])
+    #print(val_context[0])
     questions_padded, questions_masked = pad_inputs(val_questions, FLAGS.max_question_size)
     context_padded, context_masked = pad_inputs(val_context, FLAGS.max_paragraph_size)
 
