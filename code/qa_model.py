@@ -520,6 +520,8 @@ class QASystem(object):
         saver = tf.train.Saver()
         start_time = "{:%d-%m-%Y_%H:%M:%S}".format(datetime.now())
         model_name = "match-lstm"
+        checkpoint_path = os.path.join(train_dir, model_name, start_time)
+        early_stopping_path = os.path.join(checkpoint_path, "early_stopping")
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
         dev_data = zip(dataset["val_questions"], dataset["val_questions_mask"], dataset["val_context"], dataset["val_context_mask"], dataset["val_span"], dataset["val_answer"])
@@ -553,7 +555,6 @@ class QASystem(object):
             f1, em = self.evaluate_answer(session, dev_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
 
             #Save model after each epoch
-            checkpoint_path = os.path.join(train_dir, model_name, start_time)
             if not os.path.exists(checkpoint_path):
                 os.makedirs(checkpoint_path)
             save_path = saver.save(session, os.path.join(checkpoint_path, "model.ckpt"), step)
@@ -562,10 +563,9 @@ class QASystem(object):
             # Save best model based on F1 (Early Stopping)
             if f1 > best_f1:
                 best_f1 = f1
-                early_stopping_path = os.path.join(checkpoint_path, "early_stopping")
                 if not os.path.exists(early_stopping_path):
                     os.makedirs(early_stopping_path)
                 save_path = saver.save(session, os.path.join(early_stopping_path, "best_model.ckpt"))
-                print("New Best F1 Score! Best Model saved in file: %s" % save_path)
+                print("New Best F1 Score: %f !!! Best Model saved in file: %s" % (best_f1, save_path))
 
 
