@@ -564,9 +564,12 @@ class QASystem(object):
 
         #Info for saving models
         saver = tf.train.Saver()
-        start_time = "{:%d-%m-%Y_%H:%M:%S}".format(datetime.now())
+        if FLAGS.run_name == ""
+            rname = "{:%d-%m-%Y_%H:%M:%S}".format(datetime.now())
+        else:
+            rname = FLAGS.run_name
         model_name = "match-lstm"
-        checkpoint_path = os.path.join(train_dir, model_name, start_time)
+        checkpoint_path = os.path.join(train_dir, model_name, rname)
         early_stopping_path = os.path.join(checkpoint_path, "early_stopping")
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])

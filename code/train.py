@@ -32,6 +32,7 @@ tf.app.flags.DEFINE_string("log_dir", "log", "Path to store log and flag files (
 tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
 tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab file (default: ./data/squad/vocab.dat)")
 tf.app.flags.DEFINE_string("embed_path", "", "Path to the trimmed GLoVe embedding (default: ./data/squad/glove.trimmed.{embedding_size}.npz)")
+tf.app.flags.DEFINE_string("run_name", "", "A name to give the run. For checkpoint saving. Defaults to the current date and time")
 tf.app.flags.DEFINE_bool("tb", False, "Log Tensorboard Graph")
 tf.app.flags.DEFINE_bool("search", False, "Whether to use advanced search methods")
 tf.app.flags.DEFINE_bool("bi_ans", False, "Whether to use advanced bidirectional ans-ptr method")
