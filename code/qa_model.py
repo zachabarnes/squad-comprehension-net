@@ -81,9 +81,10 @@ class MatchLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
         assert hr.get_shape().as_list() == [None, l]
         assert hp_i.get_shape().as_list() == [None, l]
 
-        # Way to extent a [None, l] matrix by dim Q (kinda a hack)
+        # Way to extent a [None, l] matrix by dim Q 
         term2 = tf.matmul(hp_i,WP) + tf.matmul(hr, WR) + bP
-        term2 = tf.transpose(tf.stack([term2 for _ in range(Q)]), [1,0,2])
+        term2 = tf.tile(tf.expand_dims(term2,1),[1,Q,1])
+        #term2 = tf.transpose(tf.stack([term2 for _ in range(Q)]), [1,0,2])
 
         # Check correct term dimensions for use
         assert term1.get_shape().as_list() == [None, Q, l]
@@ -176,14 +177,15 @@ class Decoder(object):
     def decode(self, knowledge_rep, paragraph_mask, cell_init): 
         """
 
-        :param knowledge_rep: it is a representation of the paragraph and question                
-        :return:
+        param knowledge_rep: it is a representation of the paragraph and question                
+        return: tuple that contains the logits for the distributions of start and end token
         """
 
         # Decode Params
         l = self.FLAGS.state_size
         P = self.FLAGS.max_paragraph_size
-        Hr = knowledge_rep  
+        Hr = knowledge_rep 
+        mask = tf.log(tf.cast(paragraph_mask, tf.float32))
 
         # Decode variables
         V = tf.get_variable("V", [2*l,l], initializer=tf.contrib.layers.xavier_initializer())   
@@ -210,7 +212,8 @@ class Decoder(object):
 
             # Mult and extend using hack to get shape compatable
             term2 = tf.matmul(hk,Wa) + ba 
-            term2 = tf.transpose(tf.stack([term2 for _ in range(P)]), [1,0,2]) 
+            term2 = tf.tile(tf.expand_dims(term2,1),[1,P,1])
+            #term2 = tf.transpose(tf.stack([term2 for _ in range(P)]), [1,0,2]) 
             assert term2.get_shape().as_list() == [None, P, l] 
             
             # Reshape and matmul
@@ -229,20 +232,25 @@ class Decoder(object):
             beta_term = tf.reshape(beta_term ,[-1, P, 1])
             assert beta_term.get_shape().as_list() == [None, P, 1] 
 
+            #TEST OTHER MASK VERSION
+            beta_term_masked = tf.squeeze(beta_term,2) + mask
+            assert beta_term_masked.get_shape().as_list() == [None, P] 
+
             # Get Beta (prob dist over the paragraph)
-            beta = tf.nn.softmax(beta_term)
-            assert beta.get_shape().as_list() == [None, P, 1] 
+            beta = tf.nn.softmax(beta_term_masked)
+            beta_shaped = tf.expand_dims(beta, 2)
+            assert beta_shaped.get_shape().as_list() == [None, P, 1] 
 
             # Setup input to LSTM
             Hr_shaped_cell = tf.transpose(Hr, [0, 2, 1])
-            cell_input = tf.squeeze(tf.batch_matmul(Hr_shaped_cell, beta), [2])
+            cell_input = tf.squeeze(tf.batch_matmul(Hr_shaped_cell, beta_shaped), [2])
             assert cell_input.get_shape().as_list() == [None, 2*l] 
 
             # Ouput and State for next iteration
             hk, cell_state = cell(cell_input, cell_state)
 
             #Save a 2D rep of Beta as output
-            preds[i] = tf.squeeze(beta_term)    # TODO: Do we want beta? Or beta_term?   Beta would be softmaxed twice by this
+            preds[i] = beta_term_masked 
 
         return tuple(preds) # Bs, Be [batchsize, paragraph_length]
 
@@ -280,7 +288,7 @@ class QASystem(object):
             self.setup_embeddings()
             self.setup_system()
             self.setup_loss()
-            self.setup_predictions()
+            #self.setup_predictions()
 
         # ==== set up training/updating procedure ==
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
@@ -309,28 +317,32 @@ class QASystem(object):
         with vs.variable_scope("prediction"):
             masked_pred_s = tf.boolean_mask(self.pred_s, self.paragraph_mask_placeholder)
             masked_pred_e = tf.boolean_mask(self.pred_e, self.paragraph_mask_placeholder)
-
+            
             self.Beta_s = tf.nn.softmax(masked_pred_s)
             self.Beta_e = tf.nn.softmax(masked_pred_e)
             beta_summaries(self.Beta_s, "Beta_S")
             beta_summaries(self.Beta_e, "Beta_E")
 
-
-
     def setup_loss(self):
         with vs.variable_scope("loss"):
-            start_predictions = tf.unstack(self.pred_s, self.FLAGS.batch_size)
-            end_predictions = tf.unstack(self.pred_e, self.FLAGS.batch_size)
-            masks = tf.unstack(self.paragraph_mask_placeholder, self.FLAGS.batch_size)
+            # start_predictions = tf.unstack(self.pred_s, self.FLAGS.batch_size)
+            # end_predictions = tf.unstack(self.pred_e, self.FLAGS.batch_size)
+            # masks = tf.unstack(self.paragraph_mask_placeholder, self.FLAGS.batch_size)
 
-            masked_preds_s = [tf.boolean_mask(p, mask) for p, mask in zip(start_predictions, masks)]
-            masked_preds_e = [tf.boolean_mask(p, mask) for p, mask in zip(end_predictions, masks)]
+            # masked_preds_s = [tf.boolean_mask(p, mask) for p, mask in zip(start_predictions, masks)]
+            # masked_preds_e = [tf.boolean_mask(p, mask) for p, mask in zip(end_predictions, masks)]
 
-            loss_list_1 = [tf.nn.sparse_softmax_cross_entropy_with_logits(masked_preds_s[i], self.start_answer_placeholder[i]) for i in range(len(masked_preds_s))]
-            loss_list_2 = [tf.nn.sparse_softmax_cross_entropy_with_logits(masked_preds_e[i], self.end_answer_placeholder[i]) for i in range(len(masked_preds_e))]
-            l1 = tf.reduce_mean(loss_list_1)
-            l2 = tf.reduce_mean(loss_list_2)
-            self.loss = l1 + l2
+            # loss_list_1 = [tf.nn.sparse_softmax_cross_entropy_with_logits(masked_preds_s[i], self.start_answer_placeholder[i]) for i in range(len(masked_preds_s))]
+            # loss_list_2 = [tf.nn.sparse_softmax_cross_entropy_with_logits(masked_preds_e[i], self.end_answer_placeholder[i]) for i in range(len(masked_preds_e))]
+            # l1 = tf.reduce_mean(loss_list_1)
+            # l2 = tf.reduce_mean(loss_list_2)
+
+            # self.loss = l1 + l2
+
+            l1 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_s, self.start_answer_placeholder)
+            l2 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_e, self.end_answer_placeholder)
+            self.loss = tf.reduce_mean(l1+l2)
+
             tf.summary.scalar('loss', self.loss)
         
 
@@ -360,31 +372,41 @@ class QASystem(object):
         input_feed[self.question_length] = np.sum(list(q_masks), axis = 1)    # Sum and make into a list
         input_feed[self.cell_initial_placeholder] = np.zeros((1, self.FLAGS.state_size))
         input_feed[self.dropout_placeholder] = 1
-
         output_feed = [self.Beta_s, self.Beta_e]    # Get the softmaxed outputs
 
         outputs = session.run(output_feed, input_feed)
 
         return outputs
 
-
-    def answer(self, session, question, paragraph, question_mask, paragraph_mask):
-        #TODO: Make answer do batches in order to speed up qa_answer
-
-        B_s, B_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
-
-        a_s = np.argmax(B_s)
-        a_e = np.argmax(B_e)
-
-        #Force a_e to be after a_s.
+    def simple_search(self, b_s, b_e):
+        a_s = np.argmax(b_s), 
+        a_e = np.argmax(b_e)
         if a_e < a_s:
-            if np.max(B_s) > np.max(B_e):   #Move a_e to a_s b/c a_s has a higher probability
+            if np.max(b_s) > np.max(b_e):   #Move a_e to a_s b/c a_s has a higher probability
                 a_e = a_s
             else:                           #Move a_s to a_e b/c a_e has a higher probability
                 a_s = a_e
-
         return a_s, a_e
 
+    def search(self, b_s, b_e):
+        a_s, b_s, max_p = 0
+        num_elem = len(b_s)
+        window_size = 8
+        for start_ind in range(num_elem):
+            for end_ind in range(start_ind, min(window_size + start_ind, num_elem)):
+                if(b_s[start_ind]*b_e[end_ind] > max_p):
+                    max_p = b_s[start_ind]*b_e[end_ind]
+                    a_s, a_e = start_ind, end_ind
+
+        return a_s, a_e2
+
+    def answer(self, session, question, paragraph, question_mask, paragraph_mask):
+        b_s, b_e = self.decode(session, [question], [paragraph], [question_mask], [paragraph_mask])
+        if (self.FLAGS.search):
+            a_s, a_e = self.search(b_s, b_e)
+        else:
+            a_s, a_e = self.simple_search(b_s, b_e)
+        return a_s, a_e
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
         """
@@ -459,7 +481,7 @@ class QASystem(object):
         input_feed[self.paragraph_length] = np.sum(list(train_p_masks), axis = 1)   # Sum and make into a list
         input_feed[self.question_length] = np.sum(list(train_q_masks), axis = 1)    # Sum and make into a list
         input_feed[self.dropout_placeholder] = self.FLAGS.dropout
-        input_feed[self.cell_initial_placeholder] = np.zeros((self.FLAGS.batch_size, self.FLAGS.state_size))
+        input_feed[self.cell_initial_placeholder] = np.zeros((len(train_qs), self.FLAGS.state_size))
 
         output_feed = []
 
@@ -468,23 +490,32 @@ class QASystem(object):
         #output_feed.append(self.decayed_rate)
         output_feed.append(self.global_norm)
         output_feed.append(self.global_step)
+
+        #For debugging purposes
+        output_feed.append(self.pred_s)
+        output_feed.append(self.pred_e)
+
         
         if self.FLAGS.tb is True:
             output_feed.append(self.tb_vars)
             tr, loss, norm, step, summary = session.run(output_feed, input_feed)
             self.tensorboard_writer.add_summary(summary, step)
         else:
-            tr, loss, norm, step = session.run(output_feed, input_feed) 
+            tr, loss, norm, step, pred_s, pred_e = session.run(output_feed, input_feed) 
 
         return loss, norm, step
 
-    def get_batch(self, dataset):
-        batch = random.sample(dataset, self.FLAGS.batch_size)
-        for i, (q, q_mask, p, p_mask, span, answ) in enumerate(batch):
-            while span[1] >= 300:    # Simply dont process any questions with answers outside of the possible range
-                (q, q_mask, p, p_mask, span, answ) = random.choice(dataset)
-                batch[i] = (q, q_mask, p, p_mask, span, answ)
-        return batch
+    def get_batches(self, dataset, batch_size):
+        random.shuffle(dataset)
+        dataset = [d for d in dataset if d[4][1]<300]
+        num_batches = int(math.ceil(len(dataset)/batch_size))
+        batches = []
+        for i in range(num_batches):
+            start_ind = i*batch_size
+            end_ind = min(len(dataset),i*batch_size+batch_size-1)
+            batches.append(dataset[start_ind:end_ind])
+
+        return batches, num_batches
 
 
     def train(self, session, dataset, train_dir, rev_vocab):
@@ -532,16 +563,17 @@ class QASystem(object):
         dev_data = zip(dataset["val_questions"], dataset["val_questions_mask"], dataset["val_context"], dataset["val_context_mask"], dataset["val_span"], dataset["val_answer"])
 
         num_data = len(train_data)
-
         best_f1 = 0
 
         # Normal training loop
-        rolling_ave_window = 20
-        losses = [0]*rolling_ave_window
-        for cur_epoch in range(self.FLAGS.epochs):
-            for i in range(int(math.ceil(num_data/self.FLAGS.batch_size))):
-                batch = self.get_batch(train_data)
+        rolling_ave_window = 50
+        losses = [10]*rolling_ave_window
 
+        # Hack to only once cut out too big of samples
+        train_data = [d for d in train_data if d[4][1]<300]
+        for cur_epoch in range(self.FLAGS.epochs):
+            batches, num_batches = self.get_batches(train_data, self.FLAGS.batch_size)
+            for i, batch in enumerate(batches):
                 loss, norm, step = self.optimize(session, batch)
                 losses[step % rolling_ave_window] = loss
 
