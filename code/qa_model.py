@@ -489,17 +489,13 @@ class QASystem(object):
         output_feed.append(self.global_norm)
         output_feed.append(self.global_step)
 
-        #For debugging purposes
-        output_feed.append(self.pred_s)
-        output_feed.append(self.pred_e)
-
-        
+       
         if self.FLAGS.tb is True:
             output_feed.append(self.tb_vars)
             tr, loss, norm, step, summary = session.run(output_feed, input_feed)
             self.tensorboard_writer.add_summary(summary, step)
         else:
-            tr, loss, norm, step, pred_s, pred_e = session.run(output_feed, input_feed) 
+            tr, loss, norm, step = session.run(output_feed, input_feed) 
 
         return loss, norm, step
 
