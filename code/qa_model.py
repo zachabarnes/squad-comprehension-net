@@ -402,6 +402,7 @@ class QASystem(object):
 
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
         b_s, b_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
+        b_s, b_e = b_s[0], b_e[0]
         a_s, a_e = 0
         if (self.FLAGS.search):
             a_s, a_e = self.search(b_s, b_e)
@@ -589,16 +590,16 @@ class QASystem(object):
             print("Model checkpoint saved in file: %s" % save_path)
 
             logging.info("---------- Evaluating on Train Set ----------")
-            #self.evaluate_answer(session, train_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
+            self.evaluate_answer(session, train_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
             logging.info("---------- Evaluating on Dev Set ------------")
-            #f1, em = self.evaluate_answer(session, dev_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
+            f1, em = self.evaluate_answer(session, dev_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
 
             # Save best model based on F1 (Early Stopping)
-            # if f1 > best_f1:
-            #     best_f1 = f1
-            #     if not os.path.exists(early_stopping_path):
-            #         os.makedirs(early_stopping_path)
-            #     save_path = saver.save(session, os.path.join(early_stopping_path, "best_model.ckpt"))
-            #     print("New Best F1 Score: %f !!! Best Model saved in file: %s" % (best_f1, save_path))
+            if f1 > best_f1:
+                best_f1 = f1
+                if not os.path.exists(early_stopping_path):
+                    os.makedirs(early_stopping_path)
+                save_path = saver.save(session, os.path.join(early_stopping_path, "best_model.ckpt"))
+                print("New Best F1 Score: %f !!! Best Model saved in file: %s" % (best_f1, save_path))
 
 
