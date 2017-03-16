@@ -4,6 +4,7 @@ import tensorflow as tf
 
 from os.path import join as pjoin
 import logging
+import math
 
 
 def initialize_model(session, model, train_dir):
@@ -143,3 +144,15 @@ def beta_summaries(var, name):
     tf.summary.scalar(name + '_max', tf.reduce_max(var))
     tf.summary.scalar(name + '_min', tf.reduce_min(var))
     tf.summary.histogram(name + '_histogram', var)
+
+def get_batches(self, dataset, batch_size):
+        random.shuffle(dataset)
+        num_batches = int(math.ceil(len(dataset)/batch_size))
+        num_batches = 3
+        batches = []
+        for i in range(num_batches):
+            start_ind = i*batch_size
+            end_ind = min(len(dataset),i*batch_size+batch_size-1)
+            batches.append(dataset[start_ind:end_ind])
+
+        return batches, num_batches

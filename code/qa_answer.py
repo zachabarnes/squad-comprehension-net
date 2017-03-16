@@ -18,7 +18,7 @@ from qa_model import Encoder, QASystem, Decoder
 from preprocessing.squad_preprocess import data_from_json, maybe_download, squad_base_url, \
     invert_map, tokenize, token_idx_map
 import qa_data
-from utils import get_dataset, initialize_model, initialize_vocab, get_normalized_train_dir, pad_inputs
+from utils import get_dataset, initialize_model, initialize_vocab, get_normalized_train_dir, pad_inputs, get_batches
 
 import logging
 
@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO)
 
 tf.app.flags.DEFINE_float("learning_rate", 0.001, "Learning rate.")
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
-tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("batch_size", 32, "Batch size to use during answering.")
 tf.app.flags.DEFINE_integer("epochs", 0, "Number of epochs to train.")
 tf.app.flags.DEFINE_integer("state_size", 150, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("embedding_size", 300, "Size of the pretrained vocabulary.")
@@ -116,18 +116,20 @@ def generate_answers(sess, model, dataset, rev_vocab):
     questions_padded, questions_masked = pad_inputs(val_questions, FLAGS.max_question_size)
     context_padded, context_masked = pad_inputs(val_context, FLAGS.max_paragraph_size)
 
-    unified_dataset = zip(questions_padded, questions_masked, context_padded, context_masked, dataset["val_question_uuids"])
     answers = {}
 
-    for question, question_mask, paragraph, paragraph_mask, uuid in tqdm(unified_dataset):
-        a_s, a_e = model.answer(sess, [question], [paragraph], [question_mask], [paragraph_mask])
-        token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
-        sentence = []
-        for token in token_answer:
-            word = rev_vocab[token]
-            sentence.append(word)
-        answer = ' '.join(word for word in sentence)
-        answers[uuid] = answer
+    unified_dataset = zip(questions_padded, questions_masked, context_padded, context_masked, dataset["val_question_uuids"])
+    batches, num_batches = get_batches(unified_dataset, self.FLAGS.batch_size)
+
+    for batch in tqdm(batches):
+        val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, uuids = zip(*batch)
+        a_s, a_e = self.answer(session, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
+        for i, (s, e) in enumerate(zip(a_s, a_e)):
+            token_answer = paragraph[s : e + 1]      #The slice of the context paragraph that is our answer
+
+            sentence = [rev_vocab[token] for token in token_answer]
+            our_answer = ' '.join(word for word in sentence)
+            answers[uuids[i]] = our_answer
 
     return answers
 

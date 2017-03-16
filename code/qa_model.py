@@ -21,7 +21,7 @@ from tensorflow.python.ops.nn import bidirectional_dynamic_rnn
 from tensorflow.python.ops.nn import dynamic_rnn
 
 from evaluate import exact_match_score, f1_score
-from utils import beta_summaries
+from utils import beta_summaries, get_batches
 
 logging.basicConfig(level=logging.INFO)
 
@@ -449,7 +449,7 @@ class QASystem(object):
         their_answers = []
         eval_set = random.sample(dataset, sample)
 
-        batches, num_batches = self.get_batches(eval_set, self.FLAGS.batch_size)
+        batches, num_batches = get_batches(eval_set, self.FLAGS.batch_size)
 
         #for question, question_mask, paragraph, paragraph_mask, span, true_answer in eval_set:
         for batch in batches:
@@ -528,19 +528,6 @@ class QASystem(object):
 
         return loss, norm, step
 
-    def get_batches(self, dataset, batch_size):
-        random.shuffle(dataset)
-        num_batches = int(math.ceil(len(dataset)/batch_size))
-        num_batches = 3
-        batches = []
-        for i in range(num_batches):
-            start_ind = i*batch_size
-            end_ind = min(len(dataset),i*batch_size+batch_size-1)
-            batches.append(dataset[start_ind:end_ind])
-
-        return batches, num_batches
-
-
     def train(self, session, dataset, train_dir, rev_vocab):
         """
         Implement main training loop
@@ -597,7 +584,7 @@ class QASystem(object):
 
         # Hack to only once cut out too big of samples
         for cur_epoch in range(self.FLAGS.epochs):
-            batches, num_batches = self.get_batches(train_data, self.FLAGS.batch_size)
+            batches, num_batches = get_batches(train_data, self.FLAGS.batch_size)
             for i, batch in enumerate(batches):
                 loss, norm, step = self.optimize(session, batch)
                 losses[step % rolling_ave_window] = loss
