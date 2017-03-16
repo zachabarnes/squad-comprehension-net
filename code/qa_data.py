@@ -79,12 +79,15 @@ def process_glove(args, vocab_list, save_path, size=1900000, random_init=False):
                 vector = list(map(float, array[1:]))
                 if word in vocab_list:
                     idx = vocab_list.index(word)
+                    glove[idx, :] = vector
                     found += 1
                 if word.capitalize() in vocab_list:
                     idx = vocab_list.index(word.capitalize())
+                    glove[idx, :] = vector
                     found += 1
                 if word.upper() in vocab_list:
                     idx = vocab_list.index(word.upper())
+                    glove[idx, :] = vector
                     found += 1
 
         print("{}/{} of word vocab have corresponding vectors in {}".format(found, len(vocab_list), glove_path))
