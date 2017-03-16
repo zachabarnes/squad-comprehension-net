@@ -288,7 +288,7 @@ class QASystem(object):
             self.setup_embeddings()
             self.setup_system()
             self.setup_loss()
-            #self.setup_predictions()
+            self.setup_predictions()
 
         # ==== set up training/updating procedure ==
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
@@ -313,11 +313,15 @@ class QASystem(object):
 
     def setup_predictions(self):
         with vs.variable_scope("prediction"):
-            masked_pred_s = tf.boolean_mask(self.pred_s, self.paragraph_mask_placeholder)
-            masked_pred_e = tf.boolean_mask(self.pred_e, self.paragraph_mask_placeholder)
+            # masked_pred_s = tf.boolean_mask(self.pred_s, self.paragraph_mask_placeholder)
+            # masked_pred_e = tf.boolean_mask(self.pred_e, self.paragraph_mask_placeholder)
             
-            self.Beta_s = tf.nn.softmax(masked_pred_s)
-            self.Beta_e = tf.nn.softmax(masked_pred_e)
+            # self.Beta_s = tf.nn.softmax(masked_pred_s)
+            # self.Beta_e = tf.nn.softmax(masked_pred_e)
+
+            self.Beta_s = tf.nn.softmax(self.pred_s)
+            self.Beta_e = tf.nn.softmax(self.pred_e)
+
             beta_summaries(self.Beta_s, "Beta_S")
             beta_summaries(self.Beta_e, "Beta_E")
 
