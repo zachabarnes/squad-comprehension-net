@@ -369,8 +369,9 @@ class QASystem(object):
 
 
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
+        #TODO: Make answer do batches in order to speed up qa_answer
 
-        B_s, B_e = self.decode(session, [question], [paragraph], [question_mask], [paragraph_mask])
+        B_s, B_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
 
         a_s = np.argmax(B_s)
         a_e = np.argmax(B_e)
@@ -404,7 +405,7 @@ class QASystem(object):
         our_answers = []
         their_answers = []
         for question, question_mask, paragraph, paragraph_mask, span, true_answer in random.sample(dataset, sample):
-            a_s, a_e = self.answer(session, question, paragraph, question_mask, paragraph_mask)
+            a_s, a_e = self.answer(session, [question], [paragraph], [question_mask], [paragraph_mask])
             token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
 
             sentence = []

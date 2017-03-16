@@ -5,7 +5,8 @@ from squad_preprocess import *
 if __name__ == '__main__':
     glove_base_url = "http://nlp.stanford.edu/data/"
     #glove_filename = "glove.6B.zip"
-    glove_filename = "glove.42B.300d.zip"
+    #glove_filename = "glove.42B.300d.zip"
+    glove_filename = "glove.840B.300d.zip"
     prefix = os.path.join("download", "dwr")
 
     print("Storing datasets in {}".format(prefix))

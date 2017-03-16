@@ -112,8 +112,7 @@ def generate_answers(sess, model, dataset, rev_vocab):
 
     val_questions = [map(int, dataset["val_questions"][i].split()) for i in xrange(len(dataset["val_questions"]))]
     val_context = [map(int, dataset["val_context"][i].split()) for i in xrange(len(dataset["val_context"]))]
-    #print(val_questions[0])
-    #print(val_context[0])
+
     questions_padded, questions_masked = pad_inputs(val_questions, FLAGS.max_question_size)
     context_padded, context_masked = pad_inputs(val_context, FLAGS.max_paragraph_size)
 
@@ -121,7 +120,7 @@ def generate_answers(sess, model, dataset, rev_vocab):
     answers = {}
 
     for question, question_mask, paragraph, paragraph_mask, uuid in tqdm(unified_dataset):
-        a_s, a_e = model.answer(sess, question, paragraph, question_mask, paragraph_mask)
+        a_s, a_e = model.answer(sess, [question], [paragraph], [question_mask], [paragraph_mask])
         token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
         sentence = []
         for token in token_answer:
@@ -171,9 +170,11 @@ def main(_):
         print ("train_dir: ", train_dir)
         initialize_model(sess, qa, train_dir)
 
+        print ("Generating Answers")
         answers = generate_answers(sess, qa, dataset, rev_vocab)
 
         # write to json file to root dir
+        print ("Writing to json file")
         with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
             f.write(unicode(json.dumps(answers, ensure_ascii=False)))
 

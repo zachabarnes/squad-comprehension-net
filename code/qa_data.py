@@ -34,7 +34,8 @@ def setup_args():
     parser.add_argument("--glove_dir", default=glove_dir)
     parser.add_argument("--vocab_dir", default=vocab_dir)
     parser.add_argument("--glove_dim", default=300, type=int)   # Was 100
-    parser.add_argument("--random_init", default=True, type=bool)
+    parser.add_argument("--random_init", default=False, type=bool)
+    parser.add_argument("--vector_set", default="840B")
     return parser.parse_args()
 
 
@@ -64,7 +65,7 @@ def process_glove(args, vocab_list, save_path, size=1900000, random_init=True):
     :return:
     """
     if not gfile.Exists(save_path + ".npz"):
-        glove_path = os.path.join(args.glove_dir, "glove.42B.{}d.txt".format(args.glove_dim))
+        glove_path = os.path.join(args.glove_dir, "glove.{}.{}d.txt".format(args.vector_set, args.glove_dim))
         if random_init:
             glove = np.random.randn(len(vocab_list), args.glove_dim)
         else:
