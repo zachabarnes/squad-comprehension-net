@@ -379,7 +379,7 @@ class QASystem(object):
         return outputs
 
     def simple_search(self, b_s, b_e):
-        a_s = np.argmax(b_s), 
+        a_s = np.argmax(b_s)
         a_e = np.argmax(b_e)
         if a_e < a_s:
             if np.max(b_s) > np.max(b_e):   #Move a_e to a_s b/c a_s has a higher probability
@@ -402,7 +402,7 @@ class QASystem(object):
 
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
         b_s, b_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
-        b_s, b_e = b_s[0], b_e[0]
+        #b_s, b_e = b_s[0], b_e[0]
         print(b_s)
         a_s = a_e = 0
         if (self.FLAGS.search):
@@ -410,6 +410,8 @@ class QASystem(object):
         else:
             a_s, a_e = self.simple_search(b_s, b_e)
         print(a_s)
+        assert(isinstance(a_s, (int, long)))
+        assert(isinstance(a_s, (int, long)))
         return a_s, a_e
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
