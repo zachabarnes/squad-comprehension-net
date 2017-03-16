@@ -292,8 +292,6 @@ class QASystem(object):
 
         # ==== set up training/updating procedure ==
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
-        #self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 1000, decay_rate = 0.95, staircase=True)
-        tf.summary.scalar("learning_rate", self.learning_rate)
         optimizer = opt_function(self.learning_rate)
 
         grads_and_vars = optimizer.compute_gradients(self.loss, tf.trainable_variables())
@@ -585,16 +583,16 @@ class QASystem(object):
 
             sys.stdout.write('\n')
             
-            logging.info("---------- Evaluating on Train Set ----------")
-            self.evaluate_answer(session, train_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
-            logging.info("---------- Evaluating on Dev Set ------------")
-            f1, em = self.evaluate_answer(session, dev_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
-
             #Save model after each epoch
             if not os.path.exists(checkpoint_path):
                 os.makedirs(checkpoint_path)
             save_path = saver.save(session, os.path.join(checkpoint_path, "model.ckpt"), step)
             print("Model checkpoint saved in file: %s" % save_path)
+
+            logging.info("---------- Evaluating on Train Set ----------")
+            self.evaluate_answer(session, train_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
+            logging.info("---------- Evaluating on Dev Set ------------")
+            f1, em = self.evaluate_answer(session, dev_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
 
             # Save best model based on F1 (Early Stopping)
             if f1 > best_f1:
