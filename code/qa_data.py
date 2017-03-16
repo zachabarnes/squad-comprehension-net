@@ -59,7 +59,7 @@ def initialize_vocabulary(vocabulary_path):
         raise ValueError("Vocabulary file %s not found.", vocabulary_path)
 
 
-def process_glove(args, vocab_list, save_path, size=1900000, random_init=True):
+def process_glove(args, vocab_list, save_path, size=1900000, random_init=False):
     """
     :param vocab_list: [vocab]
     :return:
@@ -72,21 +72,19 @@ def process_glove(args, vocab_list, save_path, size=1900000, random_init=True):
             glove = np.zeros((len(vocab_list), args.glove_dim))
         found = 0
         with open(glove_path, 'r') as fh:
-            for line in tqdm(fh, total=size):
+            #for line in tqdm(fh, total=size):
+            for line in tqdm(fh):
                 array = line.lstrip().rstrip().split(" ")
                 word = array[0]
                 vector = list(map(float, array[1:]))
                 if word in vocab_list:
                     idx = vocab_list.index(word)
-                    glove[idx, :] = vector
                     found += 1
                 if word.capitalize() in vocab_list:
                     idx = vocab_list.index(word.capitalize())
-                    glove[idx, :] = vector
                     found += 1
                 if word.upper() in vocab_list:
                     idx = vocab_list.index(word.upper())
-                    glove[idx, :] = vector
                     found += 1
 
         print("{}/{} of word vocab have corresponding vectors in {}".format(found, len(vocab_list), glove_path))
@@ -154,7 +152,9 @@ if __name__ == '__main__':
                       [pjoin(args.source_dir, "train.context"),
                        pjoin(args.source_dir, "train.question"),
                        pjoin(args.source_dir, "val.context"),
-                       pjoin(args.source_dir, "val.question")])
+                       pjoin(args.source_dir, "val.question"),
+                       pjoin(args.source_dir, "dev.context"),
+                       pjoin(args.source_dir, "dev.question")])
     vocab, rev_vocab = initialize_vocabulary(pjoin(args.vocab_dir, "vocab.dat"))
 
     # ======== Trim Distributed Word Representation =======
@@ -177,3 +177,8 @@ if __name__ == '__main__':
     y_ids_path = valid_path + ".ids.question"
     data_to_token_ids(valid_path + ".context", x_dis_path, vocab_path)
     data_to_token_ids(valid_path + ".question", y_ids_path, vocab_path)
+
+    x_dev_dis_path = dev_path + ".ids.context"
+    y_dev_ids_path = dev_path + ".ids.question"
+    data_to_token_ids(dev_path + ".context", x_dev_dis_path, vocab_path)
+    data_to_token_ids(dev_path + ".question", y_dev_ids_path, vocab_path)
