@@ -396,7 +396,8 @@ class QASystem(object):
             for end_ind in range(start_ind, min(window_size + start_ind, num_elem)):
                 if(b_s[start_ind]*b_e[end_ind] > max_p):
                     max_p = b_s[start_ind]*b_e[end_ind]
-                    a_s, a_e = start_ind, end_ind
+                    a_s = start_ind
+                    a_e = end_ind
 
         return a_s, a_e
 
