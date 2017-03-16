@@ -403,7 +403,7 @@ class QASystem(object):
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
         b_s, b_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
         b_s, b_e = b_s[0], b_e[0]
-        a_s, a_e = 0
+        a_s = a_e = 0
         if (self.FLAGS.search):
             a_s, a_e = self.search(b_s, b_e)
         else:
