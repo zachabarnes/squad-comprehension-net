@@ -401,7 +401,7 @@ class QASystem(object):
         return a_s, a_e2
 
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
-        b_s, b_e = self.decode(session, [question], [paragraph], [question_mask], [paragraph_mask])
+        b_s, b_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
         if (self.FLAGS.search):
             a_s, a_e = self.search(b_s, b_e)
         else:
