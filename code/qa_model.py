@@ -389,7 +389,7 @@ class QASystem(object):
         return a_s, a_e
 
     def search(self, b_s, b_e):
-        a_s, b_s, max_p = 0
+        a_s = b_s = max_p = 0
         num_elem = len(b_s)
         window_size = 8
         for start_ind in range(num_elem):
@@ -402,16 +402,16 @@ class QASystem(object):
 
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
         b_s, b_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
-        #b_s, b_e = b_s[0], b_e[0]
-        print(b_s)
+
         a_s = a_e = 0
         if (self.FLAGS.search):
             a_s, a_e = self.search(b_s, b_e)
         else:
             a_s, a_e = self.simple_search(b_s, b_e)
-        print(a_s)
+
         assert(isinstance(a_s, (int, long)))
         assert(isinstance(a_s, (int, long)))
+
         return a_s, a_e
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
@@ -493,7 +493,6 @@ class QASystem(object):
 
         output_feed.append(self.train_op)
         output_feed.append(self.loss)
-        #output_feed.append(self.decayed_rate)
         output_feed.append(self.global_norm)
         output_feed.append(self.global_step)
 
@@ -512,7 +511,6 @@ class QASystem(object):
         #dataset = [d for d in dataset if d[4][1]<300]
         num_batches = int(math.ceil(len(dataset)/batch_size))
         batches = []
-        num_batches = 1
         for i in range(num_batches):
             start_ind = i*batch_size
             end_ind = min(len(dataset),i*batch_size+batch_size-1)
