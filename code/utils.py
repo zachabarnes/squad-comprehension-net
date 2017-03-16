@@ -148,7 +148,6 @@ def beta_summaries(var, name):
 def get_batches(self, dataset, batch_size):
         random.shuffle(dataset)
         num_batches = int(math.ceil(len(dataset)/batch_size))
-        num_batches = 3
         batches = []
         for i in range(num_batches):
             start_ind = i*batch_size
