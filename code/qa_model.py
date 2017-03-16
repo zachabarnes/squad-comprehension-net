@@ -505,7 +505,7 @@ class QASystem(object):
 
     def get_batches(self, dataset, batch_size):
         random.shuffle(dataset)
-        dataset = [d for d in dataset if d[4][1]<300]
+        #dataset = [d for d in dataset if d[4][1]<300]
         num_batches = int(math.ceil(len(dataset)/batch_size))
         batches = []
         for i in range(num_batches):
