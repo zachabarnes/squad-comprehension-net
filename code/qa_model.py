@@ -379,16 +379,17 @@ class QASystem(object):
         return outputs
 
     def simple_search(self, b_s, b_e):
-        a_s = np.argmax(b_s)
-        a_e = np.argmax(b_e)
-        if a_e < a_s:
-            if np.max(b_s) > np.max(b_e):   #Move a_e to a_s b/c a_s has a higher probability
-                a_e = a_s
-            else:                           #Move a_s to a_e b/c a_e has a higher probability
-                a_s = a_e
+        a_s = np.argmax(b_s, axis = 0)
+        a_e = np.argmax(b_e, axis = 0)
+        for i, row in enumerate(a_s):
+            if a_e[i] < a_s[i]:
+                if np.max(b_s[i]) > np.max(b_e[i]):   #Move a_e to a_s b/c a_s has a higher probability
+                    a_e[i] = a_s[i]
+                else:                           #Move a_s to a_e b/c a_e has a higher probability
+                    a_s[i] = a_e[i]
         return a_s, a_e
 
-    def search(self, b_s, b_e):
+    def search(self, b_s, b_e): # TODO: batch this
         a_s = b_s = max_p = 0
         num_elem = len(b_s)
         window_size = 8
@@ -403,14 +404,14 @@ class QASystem(object):
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
         b_s, b_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
 
-        a_s = a_e = 0
+        a_s = a_e = []
         if (self.FLAGS.search):
             a_s, a_e = self.search(b_s, b_e)
         else:
             a_s, a_e = self.simple_search(b_s, b_e)
 
-        assert(isinstance(a_s, (int, long)))
-        assert(isinstance(a_s, (int, long)))
+        assert(all(isinstance(item, (int,long)) for item in a_s))
+        assert(all(isinstance(item, (int,long)) for item in a_e))
 
         return a_s, a_e
 
@@ -432,19 +433,23 @@ class QASystem(object):
         
         our_answers = []
         their_answers = []
-        for question, question_mask, paragraph, paragraph_mask, span, true_answer in random.sample(dataset, sample):
-            a_s, a_e = self.answer(session, [question], [paragraph], [question_mask], [paragraph_mask])
-            token_answer = paragraph[a_s : a_e + 1]      #The slice of the context paragraph that is our answer
+        eval_set = random.sample(dataset, sample)
+        val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, _, val_true_answers = zip(*eval_set)
 
-            sentence = []
-            for token in token_answer:
-                word = rev_vocab[token]
-                sentence.append(word)
+        #for question, question_mask, paragraph, paragraph_mask, span, true_answer in eval_set:
+        a_s, a_e = self.answer(session, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks) # Now takes and returns lists
+        for s, e in zip(a_s, a_e)
+            token_answer = paragraph[s : e + 1]      #The slice of the context paragraph that is our answer
 
+            sentence = [rev_vocab[token] for token in token_answer]
             our_answer = ' '.join(word for word in sentence)
             our_answers.append(our_answer)
+
+        for true_answer in val_true_answers:
             their_answer = ' '.join(word for word in true_answer)
             their_answers.append(their_answer)
+
+        assert(len(our_answers) == len(their_answers))
 
         f1 = exact_match = total = 0
         answer_tuples = zip(their_answers, our_answers)
