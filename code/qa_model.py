@@ -402,12 +402,14 @@ class QASystem(object):
 
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
         b_s, b_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
-        b_s, b_e = b_s[0], b_e[0]
+        print(b_s)
+        #b_s, b_e = b_s[0], b_e[0]
         a_s = a_e = 0
         if (self.FLAGS.search):
             a_s, a_e = self.search(b_s, b_e)
         else:
             a_s, a_e = self.simple_search(b_s, b_e)
+        print(a_s)
         return a_s, a_e
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
