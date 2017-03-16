@@ -89,6 +89,8 @@ def process_glove(args, vocab_list, save_path, size=1900000, random_init=False):
                     idx = vocab_list.index(word.upper())
                     glove[idx, :] = vector
                     found += 1
+        # Tyler: Sometimes we get a larger # of found word vectors than there are words in the vocab_list.
+        # This could be due to there being word vectors for capital and lower case words.
 
         print("{}/{} of word vocab have corresponding vectors in {}".format(found, len(vocab_list), glove_path))
         np.savez_compressed(save_path, glove=glove)

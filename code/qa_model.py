@@ -352,17 +352,6 @@ class QASystem(object):
 
     def setup_loss(self):
         with vs.variable_scope("loss"):
-            # start_predictions = tf.unstack(self.pred_s, self.FLAGS.batch_size)
-            # end_predictions = tf.unstack(self.pred_e, self.FLAGS.batch_size)
-            # masks = tf.unstack(self.paragraph_mask_placeholder, self.FLAGS.batch_size)
-            # masked_preds_s = [tf.boolean_mask(p, mask) for p, mask in zip(start_predictions, masks)]
-            # masked_preds_e = [tf.boolean_mask(p, mask) for p, mask in zip(end_predictions, masks)]
-            # loss_list_1 = [tf.nn.sparse_softmax_cross_entropy_with_logits(masked_preds_s[i], self.start_answer_placeholder[i]) for i in range(len(masked_preds_s))]
-            # loss_list_2 = [tf.nn.sparse_softmax_cross_entropy_with_logits(masked_preds_e[i], self.end_answer_placeholder[i]) for i in range(len(masked_preds_e))]
-            # l1 = tf.reduce_mean(loss_list_1)
-            # l2 = tf.reduce_mean(loss_list_2)
-            # self.loss = l1 + l2
-
             l1 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_s, self.start_answer_placeholder)
             l2 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_e, self.end_answer_placeholder)
             self.loss = tf.reduce_mean(l1+l2)
@@ -459,20 +448,23 @@ class QASystem(object):
         our_answers = []
         their_answers = []
         eval_set = random.sample(dataset, sample)
-        val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, _, val_true_answers = zip(*eval_set)
+
+        batches, num_batches = self.get_batches(eval_set, self.FLAGS.batch_size)
 
         #for question, question_mask, paragraph, paragraph_mask, span, true_answer in eval_set:
-        a_s, a_e = self.answer(session, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks) # Now takes and returns lists
-        for s, e in zip(a_s, a_e)
-            token_answer = paragraph[s : e + 1]      #The slice of the context paragraph that is our answer
+        for batch in batches:
+            val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, _, val_true_answers = zip(*batch)
+            a_s, a_e = self.answer(session, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
+            for s, e in zip(a_s, a_e):
+                token_answer = paragraph[s : e + 1]      #The slice of the context paragraph that is our answer
 
-            sentence = [rev_vocab[token] for token in token_answer]
-            our_answer = ' '.join(word for word in sentence)
-            our_answers.append(our_answer)
+                sentence = [rev_vocab[token] for token in token_answer]
+                our_answer = ' '.join(word for word in sentence)
+                our_answers.append(our_answer)
 
-        for true_answer in val_true_answers:
-            their_answer = ' '.join(word for word in true_answer)
-            their_answers.append(their_answer)
+            for true_answer in val_true_answers:
+                their_answer = ' '.join(word for word in true_answer)
+                their_answers.append(their_answer)
 
         assert(len(our_answers) == len(their_answers))
 
@@ -539,6 +531,7 @@ class QASystem(object):
     def get_batches(self, dataset, batch_size):
         random.shuffle(dataset)
         num_batches = int(math.ceil(len(dataset)/batch_size))
+        num_batches = 3
         batches = []
         for i in range(num_batches):
             start_ind = i*batch_size
