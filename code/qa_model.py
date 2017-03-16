@@ -307,10 +307,37 @@ class QASystem(object):
 
 
     def setup_system(self):
-        Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length, self.dropout_placeholder)
-        self.pred_s, self.pred_e = self.decoder.decode(Hr, self.paragraph_mask_placeholder, self.cell_initial_placeholder)
-
+        # Get encoding representation from encode
+        with vs.variable_scope("encode"):
+            Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length, self.dropout_placeholder)
         
+        # Get Boundary predictions using decode
+        with vs.variable_scope("decode"):
+            self.pred_s, self.pred_e = self.decoder.decode(Hr, self.paragraph_mask_placeholder, self.cell_initial_placeholder)
+        
+        # If using bidirectional ans-ptr model
+        if (self.FLAGS.bi_ans):
+            #Dims for reversal
+            dims = [False, True, False]
+            dims_2 = [False, True]
+
+            with vs.variable_scope("reversed_decode"):
+
+                # Reverse Hr and the paragraph mask along P axis
+                reversed_Hr = tf.reverse(Hr, dims)
+                reversed_paragraph_mask = tf.reverse(self.paragraph_mask_placeholder, dims_2)
+
+                # Get back start and end predictions (but since input was reversed, the start is the reversed end and viceversa)
+                reversed_pred_e2, reversed_pred_s2 = self.decoder.decode(reversed_Hr, reversed_paragraph_mask, self.cell_initial_placeholder)
+
+                # Get preds by reversing back
+                pred_s2 = tf.reverse(reversed_pred_s2, dims_2)
+                pred_e2 = tf.reverse(reversed_pred_e2, dims_2)
+
+                # Avg the predictions across each direction
+                self.pred_s = tf.add(self.pred_s,pred_s2)/2.0
+                self.pred_e = tf.add(self.pred_e,pred_e2)/2.0
+
 
     def setup_predictions(self):
         with vs.variable_scope("prediction"):
@@ -328,15 +355,12 @@ class QASystem(object):
             # start_predictions = tf.unstack(self.pred_s, self.FLAGS.batch_size)
             # end_predictions = tf.unstack(self.pred_e, self.FLAGS.batch_size)
             # masks = tf.unstack(self.paragraph_mask_placeholder, self.FLAGS.batch_size)
-
             # masked_preds_s = [tf.boolean_mask(p, mask) for p, mask in zip(start_predictions, masks)]
             # masked_preds_e = [tf.boolean_mask(p, mask) for p, mask in zip(end_predictions, masks)]
-
             # loss_list_1 = [tf.nn.sparse_softmax_cross_entropy_with_logits(masked_preds_s[i], self.start_answer_placeholder[i]) for i in range(len(masked_preds_s))]
             # loss_list_2 = [tf.nn.sparse_softmax_cross_entropy_with_logits(masked_preds_e[i], self.end_answer_placeholder[i]) for i in range(len(masked_preds_e))]
             # l1 = tf.reduce_mean(loss_list_1)
             # l2 = tf.reduce_mean(loss_list_2)
-
             # self.loss = l1 + l2
 
             l1 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_s, self.start_answer_placeholder)
@@ -397,7 +421,8 @@ class QASystem(object):
             for end_ind in range(start_ind, min(window_size + start_ind, num_elem)):
                 if(b_s[start_ind]*b_e[end_ind] > max_p):
                     max_p = b_s[start_ind]*b_e[end_ind]
-                    a_s, a_e = start_ind, end_ind
+                    a_s = start_ind
+                    a_e = end_ind
 
         return a_s, a_e
 
@@ -513,7 +538,6 @@ class QASystem(object):
 
     def get_batches(self, dataset, batch_size):
         random.shuffle(dataset)
-        #dataset = [d for d in dataset if d[4][1]<300]
         num_batches = int(math.ceil(len(dataset)/batch_size))
         batches = []
         for i in range(num_batches):
@@ -567,6 +591,9 @@ class QASystem(object):
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
         dev_data = zip(dataset["val_questions"], dataset["val_questions_mask"], dataset["val_context"], dataset["val_context_mask"], dataset["val_span"], dataset["val_answer"])
+        
+        #get rid of too long answers
+        train_data = [d for d in train_data if d[4][1]<300]
 
         num_data = len(train_data)
         best_f1 = 0
@@ -576,7 +603,6 @@ class QASystem(object):
         losses = [10]*rolling_ave_window
 
         # Hack to only once cut out too big of samples
-        train_data = [d for d in train_data if d[4][1]<300]
         for cur_epoch in range(self.FLAGS.epochs):
             batches, num_batches = self.get_batches(train_data, self.FLAGS.batch_size)
             for i, batch in enumerate(batches):
