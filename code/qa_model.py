@@ -564,7 +564,7 @@ class QASystem(object):
 
         #Info for saving models
         saver = tf.train.Saver()
-        if FLAGS.run_name == ""
+        if self.FLAGS.run_name == "":
             rname = "{:%d-%m-%Y_%H:%M:%S}".format(datetime.now())
         else:
             rname = FLAGS.run_name
