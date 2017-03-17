@@ -404,7 +404,7 @@ class QASystem(object):
         return a_s, a_e
 
     def search(self, b_s, b_e): # TODO: batch this
-        a_s = b_s = max_p = 0
+        a_s = a_e = max_p = 0
         num_elem = len(b_s)
         window_size = 8
         for start_ind in range(num_elem):
