@@ -307,11 +307,11 @@ class QASystem(object):
     def setup_system(self):
         # Get encoding representation from encode
         with vs.variable_scope("encode"):
-            Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length, self.dropout_placeholder)
+            self.Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length, self.dropout_placeholder)
         
         # Get Boundary predictions using decode
         with vs.variable_scope("decode"):
-            self.pred_s, self.pred_e = self.decoder.decode(Hr, self.paragraph_mask_placeholder, self.cell_initial_placeholder)
+            self.pred_s, self.pred_e = self.decoder.decode(self.Hr, self.paragraph_mask_placeholder, self.cell_initial_placeholder)
         
         # If using bidirectional ans-ptr model
         if (self.FLAGS.bi_ans):
@@ -368,6 +368,38 @@ class QASystem(object):
             self.paragraph_embedding = tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder)
             self.question_embedding = tf.nn.embedding_lookup(embeddings,self.question_placeholder)
 
+    def get_hr(self, session, dataset):  #Currently still decodes one at a time
+        """
+        Returns the probability distribution over different positions in the paragraph
+        so that other methods like self.answer() will be able to work properly
+        """
+        train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
+
+        outputs = []
+        count = 0
+        for qs, q_masks, ps, p_masks, span, true_answer in train_data[0:1000]:
+            print(count)
+            count += 1
+            input_feed = {}
+
+            qs = [qs]
+            q_masks = [q_masks]
+            ps = [ps]
+            p_masks = [p_masks]
+
+            input_feed[self.question_placeholder] = np.array(list(qs))
+            input_feed[self.paragraph_placeholder] = np.array(list(ps))
+            input_feed[self.paragraph_mask_placeholder] = np.array(list(p_masks))
+            input_feed[self.paragraph_length] = np.sum(list(p_masks), axis = 1)   # Sum and make into a list
+            input_feed[self.question_length] = np.sum(list(q_masks), axis = 1)    # Sum and make into a list
+            input_feed[self.cell_initial_placeholder] = np.zeros((1, self.FLAGS.state_size))
+            input_feed[self.dropout_placeholder] = 1
+
+            output_feed = [self.Hr]    # Get the softmaxed outputs
+
+            outputs.append(session.run(output_feed, input_feed)[0][0])
+
+        return outputs
 
     def decode(self, session, qs, ps, q_masks, p_masks):  #Currently still decodes one at a time
         """
