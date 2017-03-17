@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from tqdm import tqdm
 import time
 import logging
 import os
@@ -395,13 +396,15 @@ class QASystem(object):
                 batch_dict['span'][-1].append(span)
                 batch_dict['true_answer'][-1].append(true_answer)
 
-        for i in xrange(0,total_batches):
+        for i in tqdm(xrange(0,total_batches)):
+            print(i,total_batches)
             input_feed = {}
 
             qs = batch_dict['qs'][i]
             q_masks = batch_dict['q_masks'][i]
             ps = batch_dict['ps'][i]
             p_masks = batch_dict['p_masks'][i]
+            print(len(p_masks))
 
             input_feed[self.question_placeholder] = np.array(list(qs))
             input_feed[self.paragraph_placeholder] = np.array(list(ps))
