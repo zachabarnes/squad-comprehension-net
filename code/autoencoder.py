@@ -31,6 +31,7 @@ class data_wrapper:
 
     def get_next_batch(self):
         val = self.inputs[self.cur_batch*self.batch_size:self.cur_batch*self.batch_size+self.batch_size]
+        print(self.cur_batch*self.batch_size,self.cur_batch*self.batch_size+self.batch_size,len(self.inputs))
         self.cur_batch += 1
         if self.cur_batch*self.batch_size+self.batch_size+200 >= len(self.inputs):
             self.cur_batch = 0
@@ -46,7 +47,7 @@ class autoencoder:
         self.learning_rate = 0.04
 
         self.training_epochs = 50
-        self.batch_size = 1
+        self.batch_size = 100
         self.display_step = 1
         self.examples_to_show = 10
         self.dropout = .5
