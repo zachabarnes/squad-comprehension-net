@@ -438,6 +438,7 @@ class QASystem(object):
         return a_s, a_e
 
     def search(self, b_s_batch, b_e_batch): # TODO: batch this
+
         window_size = 20 # based on franks histogram
         a_s_batch = []
         a_e_batch = []
