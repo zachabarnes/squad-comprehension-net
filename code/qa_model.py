@@ -430,7 +430,9 @@ class QASystem(object):
         else:
             a_s, a_e = self.simple_search(b_s, b_e)
 
-        assert(len(a_s) == len(a_e) and len(a_s) == len(question))
+        print(len(a_s), len(a_e), len(question))
+        assert(len(a_s) == len(a_e))
+        assert(len(a_s) == len(question))
         assert(all(isinstance(item, (int,long)) for item in a_s))
         assert(all(isinstance(item, (int,long)) for item in a_e))
 
