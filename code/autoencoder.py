@@ -52,8 +52,9 @@ class autoencoder:
         self.dropout = .5
 
         # Network Parameters
-        self.n_hidden_2 = 20 # 2nd layer num features
-        self.n_hidden_1 = 100 # 1st layer num features
+        self.n_hidden_3 = 20 # 2nd layer num features
+        self.n_hidden_2 = 100
+	self.n_hidden_1 = 200 # 1st layer num features
 
         self.n_input_1 = 300 # data dimension 1 
         self.n_input_2 = 300 # data dimension 2
@@ -72,14 +73,18 @@ class autoencoder:
         self.weights = {
             'encoder_h1': tf.Variable(tf.random_normal([self.n_input_2, self.n_hidden_1])),
             'encoder_h2': tf.Variable(tf.random_normal([self.n_hidden_1, self.n_hidden_2])),
-            'decoder_h1': tf.Variable(tf.random_normal([self.n_hidden_2, self.n_hidden_1])),
-            'decoder_h2': tf.Variable(tf.random_normal([self.n_hidden_1, self.n_input_2])),
+	    'encoder_h3': tf.Variable(tf.random_normal([self.n_hidden_2, self.n_hidden_3])),
+            'decoder_h1': tf.Variable(tf.random_normal([self.n_hidden_3, self.n_hidden_2])),
+            'decoder_h2': tf.Variable(tf.random_normal([self.n_hidden_2, self.n_input_1])),
+            'decoder_h3': tf.Variable(tf.random_normal([self.n_hidden_1, self.n_input_2])),
         }
         self.biases = {
             'encoder_b1': tf.Variable(tf.random_normal([1,self.n_hidden_1])),
             'encoder_b2': tf.Variable(tf.random_normal([1,self.n_hidden_2])),
-            'decoder_b1': tf.Variable(tf.random_normal([1,self.n_hidden_1])),
-            'decoder_b2': tf.Variable(tf.random_normal([1,self.n_input_2])),
+            'encoder_b3': tf.Variable(tf.random_normal([1,self.n_hidden_3])),
+            'decoder_b1': tf.Variable(tf.random_normal([1,self.n_hidden_2])),
+            'decoder_b2': tf.Variable(tf.random_normal([1,self.n_hidden_1])),
+            'decoder_b3': tf.Variable(tf.random_normal([1,self.n_input_2])),
         }
         # Construct model
         encoder_op = self.encoder(self.X)
@@ -105,14 +110,23 @@ class autoencoder:
         assert term.get_shape().as_list() == [None,self.n_hidden_1]
         layer_1 = tf.nn.sigmoid(term)
         tf.nn.dropout(layer_1, self.dropout_placeholder)
-
         assert layer_1.get_shape().as_list() == [None,self.n_hidden_1]
+
+
         term2 = tf.matmul(layer_1,self.weights['encoder_h2']) + self.biases['encoder_b2']
         assert term2.get_shape().as_list() == [None,self.n_hidden_2]
         layer_2 = tf.nn.sigmoid(term2)
         assert layer_2.get_shape().as_list() == [None,self.n_hidden_2]
-        result = tf.reshape(layer_2,[-1,self.n_input_2,self.n_hidden_2])
-        assert result.get_shape().as_list() == [None,self.n_input_1,self.n_hidden_2]
+
+
+        term3 = tf.matmul(layer_2,self.weights['encoder_h3']) + self.biases['encoder_b3']
+        assert term3.get_shape().as_list() == [None,self.n_hidden_3]
+        layer_3 = tf.nn.sigmoid(term3)
+        assert layer_3.get_shape().as_list() == [None,self.n_hidden_3]
+
+
+        result = tf.reshape(layer_3,[-1,self.n_input_2,self.n_hidden_3])
+        assert result.get_shape().as_list() == [None,self.n_input_1,self.n_hidden_3]
         tf.nn.dropout(result, self.dropout_placeholder)
         return result
 
@@ -122,21 +136,27 @@ class autoencoder:
     def decoder(self, x):
         # Encoder Hidden layer with sigmoid activation #1
 
-        assert x.get_shape().as_list() == [None,self.n_input_1,self.n_hidden_2]
-        term = tf.reshape(x,[-1,self.n_hidden_2])
-        assert term.get_shape().as_list() == [None,self.n_hidden_2]
+        assert x.get_shape().as_list() == [None,self.n_input_1,self.n_hidden_3]
+        term = tf.reshape(x,[-1,self.n_hidden_3])
+        assert term.get_shape().as_list() == [None,self.n_hidden_3]
         term = tf.matmul(term,self.weights['decoder_h1']) + self.biases['decoder_b1']
-        assert term.get_shape().as_list() == [None,self.n_hidden_1]
+        assert term.get_shape().as_list() == [None,self.n_hidden_2]
         layer_1 = tf.nn.sigmoid(term)
         tf.nn.dropout(layer_1, self.dropout_placeholder)
+        assert layer_1.get_shape().as_list() == [None,self.n_hidden_2]
 
-        assert layer_1.get_shape().as_list() == [None,self.n_hidden_1]
         term2 = tf.matmul(layer_1,self.weights['decoder_h2']) + self.biases['decoder_b2']
-        assert term2.get_shape().as_list() == [None,self.n_input_2]
-
+        assert term2.get_shape().as_list() == [None,self.n_hidden_1]
         layer_2 = tf.nn.sigmoid(term2)
-        assert layer_2.get_shape().as_list() == [None,self.n_input_2]
-        result = tf.reshape(layer_2,[-1,self.n_input_1,self.n_input_2])
+        assert layer_2.get_shape().as_list() == [None,self.n_hidden_1]
+
+
+        term3 = tf.matmul(layer_2,self.weights['decoder_h3']) + self.biases['decoder_b3']
+        assert term3.get_shape().as_list() == [None,self.n_input_2]
+        layer_3 = tf.nn.sigmoid(term3)
+        assert layer_3.get_shape().as_list() == [None,self.n_input_2]
+
+        result = tf.reshape(layer_3,[-1,self.n_input_1,self.n_input_2])
         assert result.get_shape().as_list() == [None,self.n_input_1,self.n_input_2]
 
         return result
@@ -204,7 +224,10 @@ class autoencoder:
             print("Optimization Finished!")
             save_path = self.saver.save(sess, "/data/autoencoder.ckpt")
 
+print("loading 1st datafile")
 my_data = np.load('data/encodings0.npz')['data']
+print("loading 2nd datafile")
+my_data = np.concatenate((my_data,np.load('data/encodings1.npz')['data']),axis=0)
 a = autoencoder(my_data)
 a.train()
 
