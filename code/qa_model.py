@@ -418,7 +418,7 @@ class QASystem(object):
 
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
 
-        assert(len(question) == len([paragraph]) and len(question) == len(question_mask) and len(question) == len(paragraph_mask))
+        assert(len(question) == len(paragraph) and len(question) == len(question_mask) and len(question) == len(paragraph_mask))
 
         b_s, b_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
 
@@ -453,7 +453,7 @@ class QASystem(object):
         for batch in batches:
             val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, _, val_true_answers = zip(*batch)
             a_s, a_e = self.answer(session, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
-            for s, e in zip(a_s, a_e):
+            for s, e, paragraph in zip(a_s, a_e, val_paragraphs):
                 token_answer = paragraph[s : e + 1]      #The slice of the context paragraph that is our answer
 
                 sentence = [rev_vocab[token] for token in token_answer]
