@@ -53,7 +53,7 @@ class autoencoder:
         self.dropout = .5
 
         # Network Parameters
-        self.n_hidden_3 = 20 # 2nd layer num features
+        self.n_hidden_3 = 1 # 2nd layer num features
         self.n_hidden_2 = 100
 	self.n_hidden_1 = 200 # 1st layer num features
 
@@ -216,13 +216,12 @@ class autoencoder:
                 if epoch % self.display_step == 0:
                     print("Epoch:", '%04d' % (epoch+1),
                           "cost=", "{:.9f}".format(epoch_cost))
-                if epoch % 4 == 0:
-                    print("unseen set")
+                if epoch % 4 == 3:
                     batch_xs, batch_ys = self.my_data.get_unseen_data()
                     output_feed = [self.cost]
                     input_feed = {self.X: batch_xs, self.dropout_placeholder: 1}
                     c = sess.run(output_feed, input_feed)
-                    print(c)
+                    print("Unseen data loss: ",c)
 
             print("Optimization Finished!")
             save_path = self.saver.save(sess, "/data/autoencoder.ckpt")
