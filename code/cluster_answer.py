@@ -227,7 +227,7 @@ def main(_):
         print("Calculating HR, autoencoding, and clustering")
         cluster_datasets = generate_hr(sess, qa, dataset, rev_vocab)
 
-    for cluster in xrange(0,cluster_datasets):
+    for cluster in xrange(0, len(cluster_datasets)):
         qa = QASystem(encoder, decoder, FLAGS)
         with tf.Session() as sess:
 
@@ -235,7 +235,7 @@ def main(_):
             initialize_model(sess, qa, train_dir)
 
             print ("Generating Answers")
-            answers.update(generate_answers(sess, qa, dataset, rev_vocab))
+            answers.update(generate_answers(sess, qa, cluster_datasets[cluster], rev_vocab))
 
     print ("Writing to json file")
     with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
