@@ -41,6 +41,8 @@ tf.app.flags.DEFINE_integer("max_paragraph_size", 300, "The length to cut paragr
 tf.app.flags.DEFINE_integer("max_question_size", 20, "The length to cut question off at. MUST be the same as the model.")   # As per Frank's histogram
 tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
 tf.app.flags.DEFINE_float("max_gradient_norm", 10.0, "Clip gradients to this norm.")
+tf.app.flags.DEFINE_bool("search", False, "Whether to use advanced search methods")
+tf.app.flags.DEFINE_bool("bi_ans", False, "Whether to use advanced bidirectional ans-ptr method")
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -124,12 +126,12 @@ def generate_answers(sess, model, dataset, rev_vocab):
     for batch in tqdm(batches):
         val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, uuids = zip(*batch)
         a_s, a_e = self.answer(session, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
-        for i, (s, e) in enumerate(zip(a_s, a_e)):
+        for s, e, paragraph, uuid in zip(a_s, a_e, val_paragraphs, uuids):
             token_answer = paragraph[s : e + 1]      #The slice of the context paragraph that is our answer
 
             sentence = [rev_vocab[token] for token in token_answer]
             our_answer = ' '.join(word for word in sentence)
-            answers[uuids[i]] = our_answer
+            answers[uuid] = our_answer
 
     return answers
 
