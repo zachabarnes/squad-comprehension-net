@@ -43,9 +43,9 @@ class data_wrapper:
 class autoencoder:
     def __init__(self, input_mats):
         # Parameters
-        self.learning_rate = 0.01
+        self.learning_rate = 0.04
 
-        self.training_epochs = 1
+        self.training_epochs = 50
         self.batch_size = 1
         self.display_step = 1
         self.examples_to_show = 10
@@ -193,12 +193,13 @@ class autoencoder:
                 if epoch % self.display_step == 0:
                     print("Epoch:", '%04d' % (epoch+1),
                           "cost=", "{:.9f}".format(epoch_cost))
-            print("unseen set")
-            batch_xs, batch_ys = self.my_data.get_unseen_data()
-            output_feed = [self.cost]
-            input_feed = {self.X: batch_xs, self.dropout_placeholder: 1}
-            c = sess.run(output_feed, input_feed)
-            print(c)
+                if epoch % 4 == 0:
+                    print("unseen set")
+                    batch_xs, batch_ys = self.my_data.get_unseen_data()
+                    output_feed = [self.cost]
+                    input_feed = {self.X: batch_xs, self.dropout_placeholder: 1}
+                    c = sess.run(output_feed, input_feed)
+                    print(c)
 
             print("Optimization Finished!")
             save_path = self.saver.save(sess, "/data/autoencoder.ckpt")
