@@ -45,7 +45,7 @@ def main(_):
 
     # Do what you need to load datasets from FLAGS.data_dir
     dataset = get_dataset(FLAGS.data_dir, FLAGS.max_question_size, FLAGS.max_paragraph_size)
-
+    
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
     FLAGS.embed_path = embed_path
     vocab_path = FLAGS.vocab_path or pjoin(FLAGS.data_dir, "vocab.dat")
