@@ -176,7 +176,6 @@ class Decoder(object):
 
     def decode(self, knowledge_rep, paragraph_mask, cell_init): 
         """
-
         param knowledge_rep: it is a representation of the paragraph and question                
         return: tuple that contains the logits for the distributions of start and end token
         """
@@ -259,7 +258,6 @@ class QASystem(object):
     def __init__(self, encoder, decoder, FLAGS, *args):
         """
         Initializes your System
-
         :param encoder: an encoder that you constructed in train.py
         :param decoder: a decoder that you constructed in train.py
         :param args: pass in more arguments as needed
@@ -404,7 +402,7 @@ class QASystem(object):
         return a_s, a_e
 
     def search(self, b_s, b_e): # TODO: batch this
-        a_s = b_s = max_p = 0
+        a_s = a_e = max_p = 0
         num_elem = len(b_s)
         window_size = 8
         for start_ind in range(num_elem):
@@ -529,20 +527,15 @@ class QASystem(object):
     def train(self, session, dataset, train_dir, rev_vocab):
         """
         Implement main training loop
-
         TIPS:
         You should also implement learning rate annealing (look into tf.train.exponential_decay)
         Considering the long time to train, you should save your model per epoch.
-
         More ambitious approach can include implement early stopping, or reload
         previous models if they have higher performance than the current one
-
         As suggested in the document, you should evaluate your training progress by
         printing out information every fixed number of iterations.
-
         We recommend you evaluate your model performance on F1 and EM instead of just
         looking at the cost.
-
         :param session: it should be passed in from train.py
         :param dataset: a representation of our data, in some implementations, you can
                         pass in multiple components (arguments) of one dataset to this function
