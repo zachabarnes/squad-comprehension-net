@@ -31,7 +31,7 @@ class data_wrapper:
 
     def get_next_batch(self):
         val = self.inputs[self.cur_batch*self.batch_size:self.cur_batch*self.batch_size+self.batch_size]
-	print(self.cur_batch*self.batch_size,self.cur_batch*self.batch_size+self.batch_size,len(self.inputs))
+#	print(self.cur_batch*self.batch_size,self.cur_batch*self.batch_size+self.batch_size,len(self.inputs))
         self.cur_batch += 1
         if self.cur_batch*self.batch_size+self.batch_size+200 >= len(self.inputs):
             self.cur_batch = 0
@@ -44,10 +44,10 @@ class data_wrapper:
 class autoencoder:
     def __init__(self, input_mats):
         # Parameters
-        self.learning_rate = 0.04
+        self.learning_rate = 0.02
 
-        self.training_epochs = 50
-        self.batch_size = 100
+        self.training_epochs = 40
+        self.batch_size = 1
         self.display_step = 1
         self.examples_to_show = 10
         self.dropout = .5
@@ -166,7 +166,7 @@ class autoencoder:
 
 
     def answer(self):
-        self.saver.restore(sess, "/data/autoencoder.ckpt")
+        self.saver.restore(sess, "data/autoencoder_weights/autoencoder.ckpt")
 
         result = []
         init = tf.global_variables_initializer()
@@ -195,6 +195,7 @@ class autoencoder:
         init = tf.global_variables_initializer()
         # Launch the graph
         with tf.Session() as sess:
+#            self.saver.restore(sess, "data/autoencoder_weights/autoencoder.ckpt")
             sess.run(init)
             total_batch = self.my_data.total_batch
             # Training cycle
@@ -224,7 +225,7 @@ class autoencoder:
                     print("Unseen data loss: ",c)
 
             print("Optimization Finished!")
-            save_path = self.saver.save(sess, "/data/autoencoder.ckpt")
+            save_path = self.saver.save(sess, "data/autoencoder_weights/autoencoder.ckpt")
 
 print("loading 1st datafile")
 my_data = np.load('data/encodings0.npz')['data']
