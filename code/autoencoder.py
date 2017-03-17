@@ -144,6 +144,24 @@ class autoencoder:
     def answer(self):
         self.saver.restore(sess, "/tmp/model.ckpt")
 
+        init = tf.global_variables_initializer()
+        # Launch the graph
+        with tf.Session() as sess:
+            sess.run(init)
+            total_batch = self.my_data.total_batch
+            # Training cycle
+            count = 0
+            for epoch in range(self.training_epochs):
+                # Loop over all batches
+                epoch_cost = []
+                for i in range(total_batch):
+                    batch_xs, batch_ys = self.my_data.get_next_batch()
+                    # Run optimization op (backprop) and cost op (to get loss value)
+                    output_feed = [self.decoder_op]
+                    input_feed = {self.X: batch_xs, self.dropout_placeholder: self.dropout}
+                    decoded = sess.run(output_feed, input_feed)
+
+
     def train(self):
 
         # Initializing the variables
