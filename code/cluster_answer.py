@@ -18,6 +18,7 @@ from qa_model import Encoder, QASystem, Decoder
 from preprocessing.squad_preprocess import data_from_json, maybe_download, squad_base_url, \
     invert_map, tokenize, token_idx_map
 import qa_data
+from clusterer import cluster
 from utils import get_dataset, initialize_model, initialize_vocab, get_normalized_train_dir, pad_inputs, get_batches
 
 import logging
@@ -41,6 +42,8 @@ tf.app.flags.DEFINE_integer("max_paragraph_size", 300, "The length to cut paragr
 tf.app.flags.DEFINE_integer("max_question_size", 20, "The length to cut question off at. MUST be the same as the model.")   # As per Frank's histogram
 tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
 tf.app.flags.DEFINE_float("max_gradient_norm", 10.0, "Clip gradients to this norm.")
+tf.app.flags.DEFINE_integer("n_clusters", 3, "The number of clusters we are using")
+tf.app.flags.DEFINE_string("cluster_path", "clusters", "Trained cluster model paramaters.")
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -89,7 +92,7 @@ def prepare_dev(prefix, dev_filename, vocab):
 
     return context_data, question_data, question_uuid_data
 
-def generate_answers(sess, model, dataset, rev_vocab):
+def generate_answers(sess, model, unified_dataset, rev_vocab):
     """
     Loop over the dev or test dataset and generate answer.
 
@@ -109,15 +112,6 @@ def generate_answers(sess, model, dataset, rev_vocab):
     :return:
     """
 
-    val_questions = [map(int, dataset["val_questions"][i].split()) for i in xrange(len(dataset["val_questions"]))]
-    val_context = [map(int, dataset["val_context"][i].split()) for i in xrange(len(dataset["val_context"]))]
-
-    questions_padded, questions_masked = pad_inputs(val_questions, FLAGS.max_question_size)
-    context_padded, context_masked = pad_inputs(val_context, FLAGS.max_paragraph_size)
-
-    answers = {}
-
-    unified_dataset = zip(questions_padded, questions_masked, context_padded, context_masked, dataset["val_question_uuids"])
     batches, num_batches = get_batches(unified_dataset, self.FLAGS.batch_size)
 
     for batch in tqdm(batches):
@@ -158,22 +152,34 @@ def generate_hr(sess, model, dataset, rev_vocab):
     questions_padded, questions_masked = pad_inputs(val_questions, FLAGS.max_question_size)
     context_padded, context_masked = pad_inputs(val_context, FLAGS.max_paragraph_size)
 
-    answers = {}
-
     unified_dataset = zip(questions_padded, questions_masked, context_padded, context_masked, dataset["val_question_uuids"])
-    batches, num_batches = get_batches(unified_dataset, self.FLAGS.batch_size)
+    batches, num_batches = get_batches(unified_dataset, self.FLAGS.batch_size, False)
 
+    clustered_hr = []
     for batch in tqdm(batches):
         val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, uuids = zip(*batch)
-        a_s, a_e = model.answer(session, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
-        for i, (s, e) in enumerate(zip(a_s, a_e)):
-            token_answer = paragraph[s : e + 1]      #The slice of the context paragraph that is our answer
+        hr_values = model.answer(session, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
+        clustered_hr.extend(cluster(hr_values)) #This should be a vector of cluster assignments
 
-            sentence = [rev_vocab[token] for token in token_answer]
-            our_answer = ' '.join(word for word in sentence)
-            answers[uuids[i]] = our_answer
+    cluster_example_indices = [[] for max(clustered_hr)+1]
+    for i in xrange(clustered_hr):
+        cluster_example_indices[clustered_hr[i]].append(i)
 
-    return answers
+    cluster_datasets = []
+    for cluster_num in xrange(clustered_hr):
+        if len(clustered_hr[cluster_num]) == 0:
+            print("Warning, empty cluster")
+            continue
+        new_dataset = {}
+        for key in unified_dataset.keys():
+            new_dataset[key] = []
+        for i in xrange(clustered_hr[cluster_num])
+            for key in unified_dataset.keys():
+                new_dataset[key].append(unified_dataset[key][clustered_hr[cluster_num][i]])
+
+        cluster_datasets.append(new_dataset)
+
+    return cluster_datasets
 
 
 def main(_):
@@ -207,6 +213,7 @@ def main(_):
 
     qa = QASystem(encoder, decoder, FLAGS)
 
+    cluster_datasets = None
     with tf.Session() as sess:
         #train_dir = get_normalized_train_dir(FLAGS.train_dir)
 
@@ -215,16 +222,22 @@ def main(_):
         initialize_model(sess, qa, train_dir)
 
         print("Calculating HR, autoencoding, and clustering")
-        HR = generate_hr(sess, qa, dataset, rev_vocab)
+        cluster_datasets = generate_hr(sess, qa, dataset, rev_vocab)
 
-        print ("Generating Answers")
-        answers = generate_answers(sess, qa, dataset, rev_vocab)
+    for cluster in xrange(0,cluster_datasets):
+        qa = QASystem(encoder, decoder, FLAGS)
+        with tf.Session() as sess:
 
-        # write to json file to root dir
-        print ("Writing to json file")
-        with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
-            f.write(unicode(json.dumps(answers, ensure_ascii=False)))
+            train_dir = FLAGS.cluster_path + "/" + str(i) + "train"
+            initialize_model(sess, qa, train_dir)
 
+            print ("Generating Answers")
+            answers.update(generate_answers(sess, qa, dataset, rev_vocab))
 
+    print ("Writing to json file")
+    with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
+        f.write(unicode(json.dumps(answers, ensure_ascii=False)))
+
+            
 if __name__ == "__main__":
   tf.app.run()

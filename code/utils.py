@@ -145,8 +145,9 @@ def beta_summaries(var, name):
     tf.summary.scalar(name + '_min', tf.reduce_min(var))
     tf.summary.histogram(name + '_histogram', var)
 
-def get_batches(dataset, batch_size):
-    random.shuffle(dataset)
+def get_batches(dataset, batch_size, random_shuffle=True):
+    if random_shuffle == True:
+        random.shuffle(dataset)
     num_batches = int(math.ceil(len(dataset)/batch_size))
     batches = []
     for i in range(num_batches):
