@@ -125,7 +125,7 @@ def generate_answers(sess, model, dataset, rev_vocab):
 
     for batch in tqdm(batches):
         val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, uuids = zip(*batch)
-        a_s, a_e = model.answer(session, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
+        a_s, a_e = model.answer(sess, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
         for s, e, paragraph, uuid in zip(a_s, a_e, val_paragraphs, uuids):
             token_answer = paragraph[s : e + 1]      #The slice of the context paragraph that is our answer
 
