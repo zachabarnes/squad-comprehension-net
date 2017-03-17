@@ -1,5 +1,5 @@
 import os
-
+import random
 import tensorflow as tf
 
 from os.path import join as pjoin
@@ -145,7 +145,7 @@ def beta_summaries(var, name):
     tf.summary.scalar(name + '_min', tf.reduce_min(var))
     tf.summary.histogram(name + '_histogram', var)
 
-def get_batches(self, dataset, batch_size):
+def get_batches(dataset, batch_size):
         random.shuffle(dataset)
         num_batches = int(math.ceil(len(dataset)/batch_size))
         batches = []
