@@ -438,7 +438,7 @@ class QASystem(object):
         return a_s, a_e
 
     def search(self, b_s, b_e): # TODO: batch this
-        a_s = b_s = max_p = 0
+        a_s = a_e = max_p = 0
         num_elem = len(b_s)
         window_size = 8
         for start_ind in range(num_elem):
@@ -594,7 +594,7 @@ class QASystem(object):
         if self.FLAGS.run_name == "":
             rname = "{:%d-%m-%Y_%H:%M:%S}".format(datetime.now())
         else:
-            rname = FLAGS.run_name
+            rname = self.FLAGS.run_name
         model_name = "match-lstm"
         checkpoint_path = os.path.join(train_dir, model_name, rname)
         early_stopping_path = os.path.join(checkpoint_path, "early_stopping")
