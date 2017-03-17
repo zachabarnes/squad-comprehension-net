@@ -19,6 +19,7 @@ from preprocessing.squad_preprocess import data_from_json, maybe_download, squad
     invert_map, tokenize, token_idx_map
 import qa_data
 from clusterer import cluster
+from autoencoder import autoencoder
 from utils import get_dataset, initialize_model, initialize_vocab, get_normalized_train_dir, pad_inputs, get_batches
 
 import logging
@@ -159,7 +160,9 @@ def generate_hr(sess, model, dataset, rev_vocab):
     for batch in tqdm(batches):
         val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, uuids = zip(*batch)
         hr_values = model.answer(session, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
-        clustered_hr.extend(cluster(hr_values)) #This should be a vector of cluster assignments
+        a = autoencoder(hr_values)
+        autoencoded = a.answer()
+        clustered_hr.extend(cluster(autoencoded)) #This should be a vector of cluster assignments
 
     cluster_example_indices = [[] for max(clustered_hr)+1]
     for i in xrange(clustered_hr):
@@ -238,6 +241,6 @@ def main(_):
     with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
         f.write(unicode(json.dumps(answers, ensure_ascii=False)))
 
-            
+
 if __name__ == "__main__":
   tf.app.run()
