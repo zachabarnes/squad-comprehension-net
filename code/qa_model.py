@@ -438,7 +438,7 @@ class QASystem(object):
         return a_s, a_e
 
     def search(self, b_s_batch, b_e_batch): # TODO: batch this
-        window_size = 12 # based on franks histogram
+        window_size = 20 # based on franks histogram
         a_s_batch = []
         a_e_batch = []
         for b_s, b_e in zip(b_s_batch, b_e_batch):
@@ -610,7 +610,7 @@ class QASystem(object):
         dev_data = zip(dataset["val_questions"], dataset["val_questions_mask"], dataset["val_context"], dataset["val_context_mask"], dataset["val_span"], dataset["val_answer"])
         
         #get rid of too long answers
-        train_data = [d for d in train_data if d[4][1]<300]
+        train_data = [d for d in train_data if d[4][1] < self.FLAGS.max_paragraph_size]
 
         num_data = len(train_data)
         best_f1 = 0
