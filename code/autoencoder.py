@@ -73,15 +73,17 @@ class autoencoder:
         self.weights = {
             'encoder_h1': tf.Variable(tf.random_normal([self.n_input_2, self.n_hidden_1])),
             'encoder_h2': tf.Variable(tf.random_normal([self.n_hidden_1, self.n_hidden_2])),
-	    'encoder_h3': tf.Variable(tf.random_normal([self.n_hidden_2, self.n_hidden_3])),
+	        'encoder_h3': tf.Variable(tf.random_normal([self.n_hidden_2, self.n_hidden_3])),
+
             'decoder_h1': tf.Variable(tf.random_normal([self.n_hidden_3, self.n_hidden_2])),
-            'decoder_h2': tf.Variable(tf.random_normal([self.n_hidden_2, self.n_input_1])),
+            'decoder_h2': tf.Variable(tf.random_normal([self.n_hidden_2, self.n_hidden_1])),
             'decoder_h3': tf.Variable(tf.random_normal([self.n_hidden_1, self.n_input_2])),
         }
         self.biases = {
             'encoder_b1': tf.Variable(tf.random_normal([1,self.n_hidden_1])),
             'encoder_b2': tf.Variable(tf.random_normal([1,self.n_hidden_2])),
             'encoder_b3': tf.Variable(tf.random_normal([1,self.n_hidden_3])),
+
             'decoder_b1': tf.Variable(tf.random_normal([1,self.n_hidden_2])),
             'decoder_b2': tf.Variable(tf.random_normal([1,self.n_hidden_1])),
             'decoder_b3': tf.Variable(tf.random_normal([1,self.n_input_2])),
