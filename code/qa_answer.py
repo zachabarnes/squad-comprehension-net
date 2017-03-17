@@ -136,7 +136,7 @@ def generate_answers(sess, model, dataset, rev_vocab):
             answers[uuid] = our_answer
             count += 1
 
-    print ("Generated {}/{} answers".format((count, n_questions)))
+    print ("Generated {}/{} answers".format(count, n_questions))
     return answers
 
 
