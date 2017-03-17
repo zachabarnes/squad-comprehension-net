@@ -393,8 +393,8 @@ class QASystem(object):
         return outputs
 
     def simple_search(self, b_s, b_e):
-        a_s = np.argmax(b_s, axis = 0)
-        a_e = np.argmax(b_e, axis = 0)
+        a_s = np.argmax(b_s, axis = 1)
+        a_e = np.argmax(b_e, axis = 1)
         print(len(a_s))
         for i, _ in enumerate(a_s):
             if a_e[i] < a_s[i]:
