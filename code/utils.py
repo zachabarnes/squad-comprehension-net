@@ -1,5 +1,5 @@
 import os
-
+import random
 import tensorflow as tf
 
 from os.path import join as pjoin
