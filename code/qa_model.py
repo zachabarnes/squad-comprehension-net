@@ -383,8 +383,9 @@ class QASystem(object):
         input_feed[self.paragraph_mask_placeholder] = np.array(list(p_masks))
         input_feed[self.paragraph_length] = np.sum(list(p_masks), axis = 1)   # Sum and make into a list
         input_feed[self.question_length] = np.sum(list(q_masks), axis = 1)    # Sum and make into a list
-        input_feed[self.cell_initial_placeholder] = np.zeros((1, self.FLAGS.state_size))
+        input_feed[self.cell_initial_placeholder] = np.zeros((len(qs), self.FLAGS.state_size))
         input_feed[self.dropout_placeholder] = 1
+        
         output_feed = [self.Beta_s, self.Beta_e]    # Get the softmaxed outputs
 
         outputs = session.run(output_feed, input_feed)
@@ -416,6 +417,9 @@ class QASystem(object):
         return a_s, a_e
 
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
+
+        assert(len(question) == len([paragraph]) and len(question) == len(question_mask) and len(question) == len(paragraph_mask))
+
         b_s, b_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
 
         a_s = a_e = []
@@ -431,12 +435,6 @@ class QASystem(object):
 
     def evaluate_answer(self, session, dataset, rev_vocab, sample=100, log=False):
         """
-        Evaluate the model's performance using the harmonic mean of F1 and Exact Match (EM)
-        with the set of true answer labels
-
-        This step actually takes quite some time. So we can only sample 100 examples
-        from either training or testing set.
-
         :param session: session should always be centrally managed in train.py
         :param dataset: a representation of our data, in some implementations, you can
                         pass in multiple components (arguments) of one dataset to this function
