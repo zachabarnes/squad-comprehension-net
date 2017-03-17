@@ -89,8 +89,50 @@ def prepare_dev(prefix, dev_filename, vocab):
 
     return context_data, question_data, question_uuid_data
 
-
 def generate_answers(sess, model, dataset, rev_vocab):
+    """
+    Loop over the dev or test dataset and generate answer.
+
+    Note: output format must be answers[uuid] = "real answer"
+    You must provide a string of words instead of just a list, or start and end index
+
+    In main() function we are dumping onto a JSON file
+
+    evaluate.py will take the output JSON along with the original JSON file
+    and output a F1 and EM
+
+    You must implement this function in order to submit to Leaderboard.
+
+    :param sess: active TF session
+    :param model: a built QASystem model
+    :param rev_vocab: this is a list of vocabulary that maps index to actual words
+    :return:
+    """
+
+    val_questions = [map(int, dataset["val_questions"][i].split()) for i in xrange(len(dataset["val_questions"]))]
+    val_context = [map(int, dataset["val_context"][i].split()) for i in xrange(len(dataset["val_context"]))]
+
+    questions_padded, questions_masked = pad_inputs(val_questions, FLAGS.max_question_size)
+    context_padded, context_masked = pad_inputs(val_context, FLAGS.max_paragraph_size)
+
+    answers = {}
+
+    unified_dataset = zip(questions_padded, questions_masked, context_padded, context_masked, dataset["val_question_uuids"])
+    batches, num_batches = get_batches(unified_dataset, self.FLAGS.batch_size)
+
+    for batch in tqdm(batches):
+        val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, uuids = zip(*batch)
+        a_s, a_e = model.answer(session, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
+        for i, (s, e) in enumerate(zip(a_s, a_e)):
+            token_answer = paragraph[s : e + 1]      #The slice of the context paragraph that is our answer
+
+            sentence = [rev_vocab[token] for token in token_answer]
+            our_answer = ' '.join(word for word in sentence)
+            answers[uuids[i]] = our_answer
+
+    return answers
+
+def generate_hr(sess, model, dataset, rev_vocab):
     """
     Loop over the dev or test dataset and generate answer.
 
@@ -171,6 +213,9 @@ def main(_):
         train_dir = FLAGS.train_dir
         print ("train_dir: ", train_dir)
         initialize_model(sess, qa, train_dir)
+
+        print("Calculating HR, autoencoding, and clustering")
+        HR = generate_hr(sess, qa, dataset, rev_vocab)
 
         print ("Generating Answers")
         answers = generate_answers(sess, qa, dataset, rev_vocab)
