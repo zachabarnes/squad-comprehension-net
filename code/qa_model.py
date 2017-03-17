@@ -39,13 +39,19 @@ class MatchLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
     """
     Extension of LSTM cell to do matching and magic. Designed to be fed to dynammic_rnn
     """
-    def __init__(self, hidden_size, HQ, FLAGS):
+    def __init__(self, hidden_size, HQ, FLAGS, reverse = False):
          # Uniform distribution, as opposed to xavier, which is normal
         self.HQ = HQ
         self.hidden_size = hidden_size
         self.FLAGS = FLAGS
+        self.reverse = reverse
 
         l, P, Q = self.hidden_size, self.FLAGS.max_paragraph_size, self.FLAGS.max_question_size
+
+        if (reverse):
+            P = self.FLAGS.max_question_size
+            Q = self.FLAGS.max_paragraph_size
+
         self.WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) 
         self.WP = tf.get_variable("WP", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
         self.WR = tf.get_variable("WR", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
@@ -73,6 +79,10 @@ class MatchLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
         WQ, WP, WR = self.WQ, self.WP, self.WR
         bP, w, b = self.bP, self.w, self.b
         l, P, Q = self.hidden_size, self.FLAGS.max_paragraph_size, self.FLAGS.max_question_size
+        if (self.reverse):
+            P = self.FLAGS.max_question_size
+            Q = self.FLAGS.max_paragraph_size
+
         HQ = self.HQ
         hr = state[1]
         hp_i = inputs
@@ -161,8 +171,34 @@ class Encoder(object):
             cell_b = MatchLSTMCell(l, HQ, self.FLAGS)
 
         # Calculate encodings for both forward and backward directions
-        (HR_right, HR_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_f, cell_b, HP, sequence_length = paragraph_length, dtype = tf.float32)
+        with tf.variable_scope("hp2"):
+            (HP2_right, HP2_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_f, cell_b, HP, sequence_length = paragraph_length, dtype = tf.float32)
         
+        HP2_right = tf.nn.dropout(HP2_right, dropout_rate)
+        HP2_left = tf.nn.dropout(HP2_left, dropout_rate)
+
+        with tf.variable_scope("right_question"):
+            cell_rq = MatchLSTMCell(l, HP2_right, self.FLAGS, reverse = True) 
+        
+        with tf.variable_scope("left_question"):
+            cell_lq = MatchLSTMCell(l, HP2_left, self.FLAGS, reverse = True) 
+
+        with tf.variable_scope("hq2"):
+            (HQ2_right, HQ2_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_rq, cell_lq, HQ, sequence_length = question_length, dtype = tf.float32)
+
+        HQ2_right = tf.nn.dropout(HQ2_right, dropout_rate)
+        HQ2_left = tf.nn.dropout(HQ2_left, dropout_rate)
+
+        with tf.variable_scope("right_para"):
+            cell_rp = MatchLSTMCell(l, HQ2_right, self.FLAGS) 
+        
+        with tf.variable_scope("left_para"):
+            cell_lp = MatchLSTMCell(l, HQ2_left, self.FLAGS) 
+
+        with tf.variable_scope("hr"):
+            (HR_right, HR_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_rp, cell_lp, HP2_right, sequence_length = paragraph_length, dtype = tf.float32)
+
+
         ### Append the two things calculated above into H^R
         HR = tf.concat(2,[HR_right, HR_left])
         assert HR.get_shape().as_list() == [None, P, 2*l]
