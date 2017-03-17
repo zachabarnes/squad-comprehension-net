@@ -416,7 +416,7 @@ class QASystem(object):
 
             output_feed = [self.Hr]    # Get the softmaxed outputs
 
-            outputs.append(session.run(output_feed, input_feed)[0][0])
+            outputs.extend(session.run(output_feed, input_feed)[0])
 
         return outputs
 

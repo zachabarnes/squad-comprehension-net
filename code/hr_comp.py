@@ -28,7 +28,7 @@ tf.app.flags.DEFINE_integer("max_question_size", 20, "The length to cut question
 tf.app.flags.DEFINE_integer("eval_size", 400, "The number of examples to evaluate F1 and EM on.")
 tf.app.flags.DEFINE_string("data_dir", "data/squad", "SQuAD directory (default ./data/squad)")
 tf.app.flags.DEFINE_string("train_dir", "train", "Training directory to save the model parameters (default: ./train).")
-tf.app.flags.DEFINE_string("load_train_dir", "", "Training directory to load model parameters from to resume training (default: {train_dir}).")
+tf.app.flags.DEFINE_string("load_train_dir", "~/squad-reading-comprehension/train/match-lstm/17-03-2017_07:00:39/early_stopping/", "Training directory to load model parameters from to resume training (default: {train_dir}).")
 tf.app.flags.DEFINE_string("log_dir", "log", "Path to store log and flag files (default: ./log)")
 tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
 tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab file (default: ./data/squad/vocab.dat)")
@@ -77,8 +77,9 @@ def main(_):
         print ("load_train_dir: ", load_train_dir)
         initialize_model(sess, qa, load_train_dir)
 	
-	for batch in xrange(0,17):
-	        outputs = qa.get_hr(sess, dataset, batch)
+	for batch in xrange(3,17):
+	        print(batch)
+		outputs = qa.get_hr(sess, dataset, batch)
 		f = 'data/encodings' + str(batch)
         	np.savez(f,data=outputs)
 

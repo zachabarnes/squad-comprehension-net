@@ -53,7 +53,7 @@ class autoencoder:
         self.dropout = .5
 
         # Network Parameters
-        self.n_hidden_3 = 1 # 2nd layer num features
+        self.n_hidden_3 = 20 # 2nd layer num features
         self.n_hidden_2 = 100
 	self.n_hidden_1 = 200 # 1st layer num features
 
