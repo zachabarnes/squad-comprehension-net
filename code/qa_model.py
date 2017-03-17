@@ -377,22 +377,38 @@ class QASystem(object):
 
         outputs = []
         count = 0
-        for qs, q_masks, ps, p_masks, span, true_answer in train_data[batch_num*5000:min(len(train_data),(batch_num+1)*5000)]:
-            print(count,batch_num,len(train_data))
-            count += 1
+        data_size = 5000
+        batch_size = 32
+        total_batches = math.ceil(float(data_size)/32)
+        batch_dict = {'qs':[], 'ps':[], 'q_masks':[], 'span':[], 'true_answer':[]}
+        for batch in xrange(0,total_batches):
+            start_ind = batch_num*data_size + batch*batch_size
+            end_ind = min(batch_num*data_size + (batch+1)*batch_size, batch_num*data_size + data_size)
+            end_ind = min(end_ind, len(train_data))
+            for key in batch_dict.keys():
+                batch_dict[key].append([])
+            for qs, q_masks, ps, p_masks, span, true_answer in train_data[start_ind:end_ind]:
+                batch_dict['qs'][-1].append(qs)
+                batch_dict['q_masks'][-1].append(q_masks)
+                batch_dict['ps'][-1].append(ps)
+                batch_dict['p_masks'][-1].append(p_masks)
+                batch_dict['span'][-1].append(span)
+                batch_dict['true_answer'][-1].append(true_answer)
+
+        for i in xrange(0,total_batches):
             input_feed = {}
 
-            qs = [qs]
-            q_masks = [q_masks]
-            ps = [ps]
-            p_masks = [p_masks]
+            qs = batch_dict['qs'][i]
+            q_masks = batch_dict['q_masks'][i]
+            ps = batch_dict['ps'][i]
+            p_masks = batch_dict['p_masks'][i]
 
             input_feed[self.question_placeholder] = np.array(list(qs))
             input_feed[self.paragraph_placeholder] = np.array(list(ps))
             input_feed[self.paragraph_mask_placeholder] = np.array(list(p_masks))
             input_feed[self.paragraph_length] = np.sum(list(p_masks), axis = 1)   # Sum and make into a list
             input_feed[self.question_length] = np.sum(list(q_masks), axis = 1)    # Sum and make into a list
-            input_feed[self.cell_initial_placeholder] = np.zeros((1, self.FLAGS.state_size))
+            input_feed[self.cell_initial_placeholder] = np.zeros((len(qs), self.FLAGS.state_size))
             input_feed[self.dropout_placeholder] = 1
 
             output_feed = [self.Hr]    # Get the softmaxed outputs
@@ -433,18 +449,23 @@ class QASystem(object):
                     a_s[i] = a_e[i]
         return a_s, a_e
 
-    def search(self, b_s, b_e): # TODO: batch this
-        a_s = b_s = max_p = 0
-        num_elem = len(b_s)
-        window_size = 8
-        for start_ind in range(num_elem):
-            for end_ind in range(start_ind, min(window_size + start_ind, num_elem)):
-                if(b_s[start_ind]*b_e[end_ind] > max_p):
-                    max_p = b_s[start_ind]*b_e[end_ind]
-                    a_s = start_ind
-                    a_e = end_ind
+    def search(self, b_s_batch, b_e_batch): # TODO: batch this
+        window_size = self.FLAGS.max_answer_size # based on franks histogram
+        a_s_batch = []
+        a_e_batch = []
+        for b_s, b_e in zip(b_s_batch, b_e_batch):
+            a_s, a_e, max_p = 0, 0, 0
+            num_elem = len(b_s)
+            for start_ind in range(num_elem):
+                for end_ind in range(start_ind, min(window_size + start_ind, num_elem)):
+                    if(b_s[start_ind]*b_e[end_ind] > max_p):
+                        max_p = b_s[start_ind]*b_e[end_ind]
+                        a_s = start_ind
+                        a_e = end_ind
+            a_s_batch.append(a_s)
+            a_e_batch.append(a_e)
 
-        return a_s, a_e
+        return a_s_batch, a_e_batch
 
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
 
@@ -452,12 +473,14 @@ class QASystem(object):
 
         b_s, b_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
 
-        a_s = a_e = []
+        a_s, a_e = [], []
         if (self.FLAGS.search):
             a_s, a_e = self.search(b_s, b_e)
         else:
             a_s, a_e = self.simple_search(b_s, b_e)
 
+        assert(len(a_s) == len(a_e))
+        assert(len(a_s) == len(question))
         assert(all(isinstance(item, (int,long)) for item in a_s))
         assert(all(isinstance(item, (int,long)) for item in a_e))
 
@@ -590,7 +613,7 @@ class QASystem(object):
         if self.FLAGS.run_name == "":
             rname = "{:%d-%m-%Y_%H:%M:%S}".format(datetime.now())
         else:
-            rname = FLAGS.run_name
+            rname = self.FLAGS.run_name
         model_name = "match-lstm"
         checkpoint_path = os.path.join(train_dir, model_name, rname)
         early_stopping_path = os.path.join(checkpoint_path, "early_stopping")
@@ -599,7 +622,7 @@ class QASystem(object):
         dev_data = zip(dataset["val_questions"], dataset["val_questions_mask"], dataset["val_context"], dataset["val_context_mask"], dataset["val_span"], dataset["val_answer"])
         
         #get rid of too long answers
-        train_data = [d for d in train_data if d[4][1]<300]
+        train_data = [d for d in train_data if d[4][1] < self.FLAGS.max_paragraph_size]
 
         num_data = len(train_data)
         best_f1 = 0
