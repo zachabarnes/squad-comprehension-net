@@ -565,7 +565,7 @@ class QASystem(object):
         if self.FLAGS.run_name == "":
             rname = "{:%d-%m-%Y_%H:%M:%S}".format(datetime.now())
         else:
-            rname = FLAGS.run_name
+            rname = self.FLAGS.run_name
         model_name = "match-lstm"
         checkpoint_path = os.path.join(train_dir, model_name, rname)
         early_stopping_path = os.path.join(checkpoint_path, "early_stopping")
