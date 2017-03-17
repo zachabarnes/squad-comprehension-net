@@ -395,9 +395,9 @@ class QASystem(object):
     def simple_search(self, b_s, b_e):
         a_s = np.argmax(b_s, axis = 0)
         a_e = np.argmax(b_e, axis = 0)
-        for i, row in enumerate(a_s):
+        for i, _ in enumerate(a_s):
             if a_e[i] < a_s[i]:
-                if np.max(b_s[i]) > np.max(b_e[i]):   #Move a_e to a_s b/c a_s has a higher probability
+                if np.max(b_s[i,:]) > np.max(b_e[i,:]):   #Move a_e to a_s b/c a_s has a higher probability
                     a_e[i] = a_s[i]
                 else:                           #Move a_s to a_e b/c a_e has a higher probability
                     a_s[i] = a_e[i]
