@@ -41,6 +41,8 @@ tf.app.flags.DEFINE_integer("max_paragraph_size", 300, "The length to cut paragr
 tf.app.flags.DEFINE_integer("max_question_size", 20, "The length to cut question off at. MUST be the same as the model.")   # As per Frank's histogram
 tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
 tf.app.flags.DEFINE_float("max_gradient_norm", 10.0, "Clip gradients to this norm.")
+tf.app.flags.DEFINE_bool("search", False, "Whether to use advanced search methods")
+tf.app.flags.DEFINE_bool("bi_ans", False, "Whether to use advanced bidirectional ans-ptr method")
 
 FLAGS = tf.app.flags.FLAGS
 
