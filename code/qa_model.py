@@ -379,8 +379,8 @@ class QASystem(object):
         count = 0
         data_size = 5000
         batch_size = 32
-        total_batches = math.ceil(float(data_size)/32)
-        batch_dict = {'qs':[], 'ps':[], 'q_masks':[], 'span':[], 'true_answer':[]}
+        total_batches = int(math.ceil(float(data_size)/32))
+        batch_dict = {'qs':[], 'ps':[], 'p_masks':[], 'q_masks':[], 'span':[], 'true_answer':[]}
         for batch in xrange(0,total_batches):
             start_ind = batch_num*data_size + batch*batch_size
             end_ind = min(batch_num*data_size + (batch+1)*batch_size, batch_num*data_size + data_size)
