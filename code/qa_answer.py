@@ -121,8 +121,10 @@ def generate_answers(sess, model, dataset, rev_vocab):
     answers = {}
 
     unified_dataset = zip(questions_padded, questions_masked, context_padded, context_masked, dataset["val_question_uuids"])
+    n_questions = dataset["val_question_uuids"]
     batches, num_batches = get_batches(unified_dataset, FLAGS.batch_size)
 
+    count = 0
     for batch in tqdm(batches):
         val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, uuids = zip(*batch)
         a_s, a_e = model.answer(sess, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
@@ -132,7 +134,9 @@ def generate_answers(sess, model, dataset, rev_vocab):
             sentence = [rev_vocab[token] for token in token_answer]
             our_answer = ' '.join(word for word in sentence)
             answers[uuid] = our_answer
+            count += 1
 
+    print ("Generated {}/{} answers".format((count, n_questions)))
     return answers
 
 
