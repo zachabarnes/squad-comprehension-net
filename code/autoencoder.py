@@ -205,7 +205,7 @@ class autoencoder:
             print("Optimization Finished!")
             save_path = self.saver.save(sess, "/data/autoencoder.ckpt")
 
-my_data = np.load('data/encodings.npz')['data']
+my_data = np.load('data/encodings0.npz')['data']
 a = autoencoder(my_data)
 a.train()
 

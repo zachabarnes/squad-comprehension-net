@@ -368,7 +368,7 @@ class QASystem(object):
             self.paragraph_embedding = tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder)
             self.question_embedding = tf.nn.embedding_lookup(embeddings,self.question_placeholder)
 
-    def get_hr(self, session, dataset):  #Currently still decodes one at a time
+    def get_hr(self, session, dataset, batch_num):  #Currently still decodes one at a time
         """
         Returns the probability distribution over different positions in the paragraph
         so that other methods like self.answer() will be able to work properly
@@ -377,8 +377,8 @@ class QASystem(object):
 
         outputs = []
         count = 0
-        for qs, q_masks, ps, p_masks, span, true_answer in train_data[0:1000]:
-            print(count)
+        for qs, q_masks, ps, p_masks, span, true_answer in train_data[batch_num*5000:min(len(train_data),(batch_num+1)*5000)]:
+            print(count,batch_num,len(train_data))
             count += 1
             input_feed = {}
 

@@ -76,9 +76,11 @@ def main(_):
         load_train_dir = FLAGS.load_train_dir or FLAGS.train_dir
         print ("load_train_dir: ", load_train_dir)
         initialize_model(sess, qa, load_train_dir)
-
-        outputs = qa.get_hr(sess, dataset)
-        np.savez('data/encodings',data=outputs)
+	
+	for batch in xrange(0,17):
+	        outputs = qa.get_hr(sess, dataset, batch)
+		f = 'data/encodings' + str(batch)
+        	np.savez(f,data=outputs)
 
 
 if __name__ == "__main__":
