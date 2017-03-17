@@ -142,8 +142,9 @@ class autoencoder:
 
 
     def answer(self):
-        self.saver.restore(sess, "/tmp/model.ckpt")
+        self.saver.restore(sess, "/data/autoencoder.ckpt")
 
+        result = []
         init = tf.global_variables_initializer()
         # Launch the graph
         with tf.Session() as sess:
@@ -160,6 +161,8 @@ class autoencoder:
                     output_feed = [self.decoder_op]
                     input_feed = {self.X: batch_xs, self.dropout_placeholder: self.dropout}
                     decoded = sess.run(output_feed, input_feed)
+                    result.extend(decoded)
+        np.savez('data/encoded_hr',data='result')
 
 
     def train(self):
@@ -201,3 +204,13 @@ class autoencoder:
 
             print("Optimization Finished!")
             save_path = self.saver.save(sess, "/data/autoencoder.ckpt")
+
+my_data = np.load('data/encodings.npz')['data']
+a = autoencoder(my_data)
+a.train()
+
+
+
+
+
+
