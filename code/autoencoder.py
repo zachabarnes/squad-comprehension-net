@@ -44,6 +44,7 @@ class autoencoder:
     def __init__(self, input_mats):
         # Parameters
         self.learning_rate = 0.01
+
         self.training_epochs = 1
         self.batch_size = 1
         self.display_step = 1
@@ -185,10 +186,7 @@ class autoencoder:
                     input_feed = {self.X: batch_xs, self.dropout_placeholder: self.dropout}
                     _, c, decoded = sess.run(output_feed, input_feed)
                     count += 1
-                    #if count % 1000 == 0:
-                    #    print('result')
-                        #for l in xrange(0,len(decoded[0])):
-                         #    print( float(sum((decoded[0][l])))/len(decoded[0][1]))
+
                     epoch_cost.append(c)
                 # Display logs per epoch step
                 epoch_cost = float(sum(epoch_cost))/len(epoch_cost)
