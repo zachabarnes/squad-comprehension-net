@@ -425,13 +425,12 @@ class QASystem(object):
 
         b_s, b_e = self.decode(session, question, paragraph, question_mask, paragraph_mask)
 
-        a_s = a_e = []
+        a_s, a_e = [], []
         if (self.FLAGS.search):
             a_s, a_e = self.search(b_s, b_e)
         else:
             a_s, a_e = self.simple_search(b_s, b_e)
 
-        print(len(a_s), len(a_e), len(question))
         assert(len(a_s) == len(a_e))
         assert(len(a_s) == len(question))
         assert(all(isinstance(item, (int,long)) for item in a_s))
