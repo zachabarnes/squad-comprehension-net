@@ -403,9 +403,10 @@ class QASystem(object):
 
     def search(self, b_s_batch, b_e_batch): # TODO: batch this
         window_size = 12 # based on franks histogram
-        a_s_batch = a_e_batch = []
+        a_s_batch = []
+        a_e_batch = []
         for b_s, b_e in zip(b_s_batch, b_e_batch):
-            a_s = a_e = max_p = 0
+            a_s, a_e, max_p = 0, 0, 0
             num_elem = len(b_s)
             for start_ind in range(num_elem):
                 for end_ind in range(start_ind, min(window_size + start_ind, num_elem)):
