@@ -574,7 +574,7 @@ class QASystem(object):
         dev_data = zip(dataset["val_questions"], dataset["val_questions_mask"], dataset["val_context"], dataset["val_context_mask"], dataset["val_span"], dataset["val_answer"])
         
         #get rid of too long answers
-        train_data = [d for d in train_data if d[4][1]<300]
+        train_data = [d for d in train_data if d[4][1] < self.FLAGS.max_paragraph_size]
 
         num_data = len(train_data)
         best_f1 = 0
