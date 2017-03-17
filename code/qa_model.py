@@ -401,18 +401,22 @@ class QASystem(object):
                     a_s[i] = a_e[i]
         return a_s, a_e
 
-    def search(self, b_s, b_e): # TODO: batch this
-        a_s = a_e = max_p = 0
-        num_elem = len(b_s)
-        window_size = 8
-        for start_ind in range(num_elem):
-            for end_ind in range(start_ind, min(window_size + start_ind, num_elem)):
-                if(b_s[start_ind]*b_e[end_ind] > max_p):
-                    max_p = b_s[start_ind]*b_e[end_ind]
-                    a_s = start_ind
-                    a_e = end_ind
+    def search(self, b_s_batch, b_e_batch): # TODO: batch this
+        window_size = 12 # based on franks histogram
+        a_s_batch = a_e_batch = []
+        for b_s, b_e in zip(b_s_batch, b_e_batch):
+            a_s = a_e = max_p = 0
+            num_elem = len(b_s)
+            for start_ind in range(num_elem):
+                for end_ind in range(start_ind, min(window_size + start_ind, num_elem)):
+                    if(b_s[start_ind]*b_e[end_ind] > max_p):
+                        max_p = b_s[start_ind]*b_e[end_ind]
+                        a_s = start_ind
+                        a_e = end_ind
+            a_s_batch.append(a_s)
+            a_e_batch.append(a_e)
 
-        return a_s, a_e
+        return a_s_batch, a_e_batch
 
     def answer(self, session, question, paragraph, question_mask, paragraph_mask):
 
@@ -426,6 +430,7 @@ class QASystem(object):
         else:
             a_s, a_e = self.simple_search(b_s, b_e)
 
+        assert(len(a_s) == len(a_e) and len(a_s) == len(question))
         assert(all(isinstance(item, (int,long)) for item in a_s))
         assert(all(isinstance(item, (int,long)) for item in a_e))
 
