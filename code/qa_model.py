@@ -134,6 +134,9 @@ class Encoder(object):
         assert input_question.get_shape().as_list() == [None, self.FLAGS.max_question_size, self.FLAGS.embedding_size]
         assert input_paragraph.get_shape().as_list() == [None, self.FLAGS.max_paragraph_size, self.FLAGS.embedding_size]
 
+        input_question = tf.nn.dropout(input_question, dropout_rate)
+        input_paragraph = tf.nn.dropout(input_paragraph, dropout_rate)
+
         #Preprocessing LSTM
         with tf.variable_scope("question_encode"):
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.size) #self.size passed in through initialization from "state_size" flag
@@ -146,8 +149,8 @@ class Encoder(object):
         assert HQ.get_shape().as_list() == [None, self.FLAGS.max_question_size, self.FLAGS.state_size]
         assert HP.get_shape().as_list() == [None, self.FLAGS.max_paragraph_size, self.FLAGS.state_size]
 
-        HQ = tf.nn.dropout(HQ, dropout_rate)    # A dropout rate of 1 indicates no dropout
-        HP = tf.nn.dropout(HP, dropout_rate)
+        #HQ = tf.nn.dropout(HQ, dropout_rate)    # A dropout rate of 1 indicates no dropout
+        #HP = tf.nn.dropout(HP, dropout_rate)
 
         # Encoding params
         l = self.size
@@ -160,7 +163,6 @@ class Encoder(object):
 
             if (self.FLAGS.deep):
                 cell_f = [cell_f] + [tf.nn.rnn_cell.BasicLSTMCell(self.size)]*2
-                cell_f = tf.nn.rnn_cell.DropoutWrapper(cell_f, output_keep_prob=dropout_rate)
                 cell_f = tf.nn.rnn_cell.MultiRNNCell(cell_f)
 
         with tf.variable_scope("backward"):
@@ -168,20 +170,16 @@ class Encoder(object):
 
             if (self.FLAGS.deep):
                 cell_b = [cell_b] + [tf.nn.rnn_cell.BasicLSTMCell(self.size)]*2
-                cell_b = tf.nn.rnn_cell.DropoutWrapper(cell_b, output_keep_prob=dropout_rate)
                 cell_b = tf.nn.rnn_cell.MultiRNNCell(cell_b)
 
         # Calculate encodings for both forward and backward directions
         (HR_right, HR_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_f, cell_b, HP, sequence_length = paragraph_length, dtype = tf.float32)
         
         ### Append the two things calculated above into H^R
-
-        HR_right = tf.nn.dropout(HR_right, dropout_rate)
-        HR_left = tf.nn.dropout(HR_left, dropout_rate)
-
-        
         HR = tf.concat(2,[HR_right, HR_left])
         assert HR.get_shape().as_list() == [None, P, 2*l]   
+
+        HR = tf.nn.dropout(HR, dropout_rate/2.0)
 
         return HR
 
@@ -295,6 +293,7 @@ class QASystem(object):
         self.question_length = tf.placeholder(tf.int32, (None), name="question_length")
         self.cell_initial_placeholder = tf.placeholder(tf.float32, (None, self.FLAGS.state_size), name="cell_init")
         self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
+        self.train_bool = tf.placeholder(tf.bool, (), name="train_bool")
 
         # ==== assemble pieces ====
         with tf.variable_scope("qa", initializer=tf.uniform_unit_scaling_initializer(1.0)):
@@ -305,7 +304,9 @@ class QASystem(object):
 
         # ==== set up training/updating procedure ==
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
-        optimizer = opt_function(self.learning_rate)
+        self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 10000, decay_rate = 0.95, staircase=True)
+        tf.summary.scalar("learning_rate", self.decayed_rate)
+        optimizer = opt_function(self.decayed_rate)
 
         grads_and_vars = optimizer.compute_gradients(self.loss, tf.trainable_variables())
 
@@ -354,14 +355,9 @@ class QASystem(object):
 
     def setup_predictions(self):
         with vs.variable_scope("prediction"):
-            # masked_pred_s = tf.boolean_mask(self.pred_s, self.paragraph_mask_placeholder)
-            # masked_pred_e = tf.boolean_mask(self.pred_e, self.paragraph_mask_placeholder)
-
             self.Beta_s = tf.nn.softmax(self.pred_s)
             self.Beta_e = tf.nn.softmax(self.pred_e)
 
-            beta_summaries(self.Beta_s, "Beta_S")
-            beta_summaries(self.Beta_e, "Beta_E")
 
     def setup_loss(self):
         with vs.variable_scope("loss"):
@@ -369,7 +365,8 @@ class QASystem(object):
             l2 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_e, self.end_answer_placeholder)
             self.loss = tf.reduce_mean(l1+l2)
 
-            tf.summary.scalar('loss', self.loss)
+            
+            y = tf.cond(self.train_bool, lambda: tf.summary.scalar('train_loss', self.loss), lambda: tf.summary.scalar('val_loss', self.loss))
         
 
     def setup_embeddings(self):
@@ -507,8 +504,7 @@ class QASystem(object):
 
     def validate(self,session, batch):
         """
-        Takes in actual data to optimize your model
-        This method is equivalent to a step() function
+        Does not perform any training update.
         :return:
         """
         val_qs, val_q_masks, val_ps, val_p_masks, val_spans, val_answers = zip(*batch)    # Unzip batch, each returned element is a tuple of lists
@@ -527,6 +523,7 @@ class QASystem(object):
         input_feed[self.question_length] = np.sum(list(val_q_masks), axis = 1)    # Sum and make into a list
         input_feed[self.dropout_placeholder] = 1
         input_feed[self.cell_initial_placeholder] = np.zeros((len(val_qs), self.FLAGS.state_size))
+        input_feed[self.train_bool] = False
 
         output_feed = []
 
@@ -569,6 +566,7 @@ class QASystem(object):
         input_feed[self.question_length] = np.sum(list(train_q_masks), axis = 1)    # Sum and make into a list
         input_feed[self.dropout_placeholder] = self.FLAGS.dropout
         input_feed[self.cell_initial_placeholder] = np.zeros((len(train_qs), self.FLAGS.state_size))
+        input_feed[self.train_bool] = True
 
         output_feed = []
 
@@ -660,9 +658,11 @@ class QASystem(object):
                 
                 #Print relevant params
                 num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
-                sys.stdout.write('\r')
+                if not self.FLAGS.background:
+                    sys.stdout.write('\r')
                 sys.stdout.write("EPOCH: %d ==> (Avg Loss: [Train: %.3f][Val: %.3f] <--> Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f] [Step: %d]" % (cur_epoch + 1, mean_loss, mean_val_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm, step))
-                sys.stdout.flush()
+                if not self.FLAGS.background:
+                    sys.stdout.flush()
 
             sys.stdout.write('\n')
             

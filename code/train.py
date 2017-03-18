@@ -15,11 +15,11 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-tf.app.flags.DEFINE_float("learning_rate", 0.001, "Learning rate.")
+tf.app.flags.DEFINE_float("learning_rate", 0.002, "Learning rate.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 10.0, "Clip gradients to this norm.")
-tf.app.flags.DEFINE_float("dropout", 0.5, "Fraction of units randomly dropped on non-recurrent connections.")
-tf.app.flags.DEFINE_integer("batch_size", 32, "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs to train.")
+tf.app.flags.DEFINE_float("dropout", 0.6, "Fraction of units randomly dropped on non-recurrent connections.")
+tf.app.flags.DEFINE_integer("batch_size", 30, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("epochs", 30, "Number of epochs to train.")
 tf.app.flags.DEFINE_integer("state_size", 150, "Size of each model layer. Default is 150, as per Match-LSTM paper")     # Previously, 200
 tf.app.flags.DEFINE_integer("embedding_size", 300, "Size of the pretrained embeddings. 300 is the max size available for GloVe")    # Previously, 100
 tf.app.flags.DEFINE_integer("max_paragraph_size", 400, "The length to cut paragraphs off at")   # As per Frank's beautiful histogram
@@ -38,8 +38,8 @@ tf.app.flags.DEFINE_bool("tb", False, "Log Tensorboard Graph")
 tf.app.flags.DEFINE_bool("search", False, "Whether to use advanced search methods")
 tf.app.flags.DEFINE_bool("bi_ans", False, "Whether to use advanced bidirectional ans-ptr method")
 tf.app.flags.DEFINE_bool("deep", False, "Whether to use advanced deep layer between match and ans-ptr")
+tf.app.flags.DEFINE_bool("background", False, "Prettier logging if running in background")
 
-# tf.app.flags.DEFINE_integer("keep", 0, "How many checkpoints to keep, 0 indicates keep all.")
 FLAGS = tf.app.flags.FLAGS
 
 
