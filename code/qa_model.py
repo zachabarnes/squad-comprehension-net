@@ -689,7 +689,7 @@ class QASystem(object):
             if not os.path.exists(checkpoint_path):
                 os.makedirs(checkpoint_path)
             save_path = saver.save(session, os.path.join(checkpoint_path, "model.ckpt"), step)
-            print("Model checkpoint saved in file: %s" % save_path)
+            logging.info("Model checkpoint saved in file: %s" % save_path)
 
             logging.info("---------- Evaluating on Train Set ----------")
             self.evaluate_answer(session, train_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
@@ -702,6 +702,6 @@ class QASystem(object):
                 if not os.path.exists(early_stopping_path):
                     os.makedirs(early_stopping_path)
                 save_path = saver.save(session, os.path.join(early_stopping_path, "best_model.ckpt"))
-                print("New Best F1 Score: %f !!! Best Model saved in file: %s" % (best_f1, save_path))
+                logging.info("New Best F1 Score: %f !!! Best Model saved in file: %s" % (best_f1, save_path))
 
 
