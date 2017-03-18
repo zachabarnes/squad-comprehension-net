@@ -144,6 +144,9 @@ class Encoder(object):
         assert input_question.get_shape().as_list() == [None, self.FLAGS.max_question_size, self.FLAGS.embedding_size]
         assert input_paragraph.get_shape().as_list() == [None, self.FLAGS.max_paragraph_size, self.FLAGS.embedding_size]
 
+        input_question = tf.nn.dropout(input_question, dropout_rate)
+        input_paragraph = tf.nn.dropout(input_paragraph, dropout_rate)
+
         #Preprocessing LSTM
         with tf.variable_scope("question_encode"):
             cell = tf.nn.rnn_cell.BasicLSTMCell(self.size) #self.size passed in through initialization from "state_size" flag
@@ -156,8 +159,8 @@ class Encoder(object):
         assert HQ.get_shape().as_list() == [None, self.FLAGS.max_question_size, self.FLAGS.state_size]
         assert HP.get_shape().as_list() == [None, self.FLAGS.max_paragraph_size, self.FLAGS.state_size]
 
-        HQ = tf.nn.dropout(HQ, dropout_rate)    # A dropout rate of 1 indicates no dropout
-        HP = tf.nn.dropout(HP, dropout_rate)
+        #HQ = tf.nn.dropout(HQ, dropout_rate)    # A dropout rate of 1 indicates no dropout
+        #HP = tf.nn.dropout(HP, dropout_rate)
 
         # Encoding params
         l = self.size
@@ -167,15 +170,24 @@ class Encoder(object):
         # Initialize forward and backward matching LSTMcells with same matching params
         with tf.variable_scope("forward"):
             cell_f = MatchLSTMCell(l, HQ, self.FLAGS) 
+
+            if (self.FLAGS.deep):
+                cell_f = [cell_f] + [tf.nn.rnn_cell.BasicLSTMCell(self.size)]*2
+                cell_f = tf.nn.rnn_cell.MultiRNNCell(cell_f)
+
         with tf.variable_scope("backward"):
             cell_b = MatchLSTMCell(l, HQ, self.FLAGS)
+
+            if (self.FLAGS.deep):
+                cell_b = [cell_b] + [tf.nn.rnn_cell.BasicLSTMCell(self.size)]*2
+                cell_b = tf.nn.rnn_cell.MultiRNNCell(cell_b)
 
         # Calculate encodings for both forward and backward directions
         with tf.variable_scope("hp2"):
             (HP2_right, HP2_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_f, cell_b, HP, sequence_length = paragraph_length, dtype = tf.float32)
         
-        HP2_right = tf.nn.dropout(HP2_right, dropout_rate)
-        HP2_left = tf.nn.dropout(HP2_left, dropout_rate)
+        #HP2_right = tf.nn.dropout(HP2_right, dropout_rate)
+        #HP2_left = tf.nn.dropout(HP2_left, dropout_rate)
 
         with tf.variable_scope("right_question"):
             cell_rq = MatchLSTMCell(l, HP2_right, self.FLAGS, reverse = True) 
@@ -186,8 +198,8 @@ class Encoder(object):
         with tf.variable_scope("hq2"):
             (HQ2_right, HQ2_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_rq, cell_lq, HQ, sequence_length = question_length, dtype = tf.float32)
 
-        HQ2_right = tf.nn.dropout(HQ2_right, dropout_rate)
-        HQ2_left = tf.nn.dropout(HQ2_left, dropout_rate)
+        #HQ2_right = tf.nn.dropout(HQ2_right, dropout_rate)
+        #HQ2_left = tf.nn.dropout(HQ2_left, dropout_rate)
 
         with tf.variable_scope("right_para"):
             cell_rp = MatchLSTMCell(l, HQ2_right, self.FLAGS) 
@@ -201,9 +213,11 @@ class Encoder(object):
 
         ### Append the two things calculated above into H^R
         HR = tf.concat(2,[HR_right, HR_left])
-        assert HR.get_shape().as_list() == [None, P, 2*l]
-        
-        HR = tf.nn.dropout(HR, dropout_rate)
+        assert HR.get_shape().as_list() == [None, P, 2*l]   
+
+        dropout_rate2 = (1 - dropout_rate)/2.0 + dropout_rate
+        HR = tf.nn.dropout(HR, dropout_rate2)
+
         return HR
 
 class Decoder(object):
@@ -326,7 +340,9 @@ class QASystem(object):
 
         # ==== set up training/updating procedure ==
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
-        optimizer = opt_function(self.learning_rate)
+        self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 10000, decay_rate = 0.95, staircase=True)
+        self.learning_rate_tb = tf.summary.scalar("learning_rate", self.decayed_rate)
+        optimizer = opt_function(self.decayed_rate)
 
         grads_and_vars = optimizer.compute_gradients(self.loss, tf.trainable_variables())
 
@@ -334,7 +350,7 @@ class QASystem(object):
         variables = [v for g, v in grads_and_vars]
 
         clipped_grads, self.global_norm = tf.clip_by_global_norm(grads, self.FLAGS.max_gradient_norm)
-        tf.summary.scalar("global_norm", self.global_norm)
+        self.global_norm_tb = tf.summary.scalar("global_norm", self.global_norm)
         self.train_op = optimizer.apply_gradients(zip(clipped_grads, variables), global_step = self.global_step, name = "apply_clipped_grads")
 
         self.saver = tf.train.Saver(tf.global_variables())
@@ -375,22 +391,18 @@ class QASystem(object):
 
     def setup_predictions(self):
         with vs.variable_scope("prediction"):
-            # masked_pred_s = tf.boolean_mask(self.pred_s, self.paragraph_mask_placeholder)
-            # masked_pred_e = tf.boolean_mask(self.pred_e, self.paragraph_mask_placeholder)
-
             self.Beta_s = tf.nn.softmax(self.pred_s)
             self.Beta_e = tf.nn.softmax(self.pred_e)
 
-            beta_summaries(self.Beta_s, "Beta_S")
-            beta_summaries(self.Beta_e, "Beta_E")
 
     def setup_loss(self):
         with vs.variable_scope("loss"):
             l1 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_s, self.start_answer_placeholder)
             l2 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_e, self.end_answer_placeholder)
             self.loss = tf.reduce_mean(l1+l2)
-
-            tf.summary.scalar('loss', self.loss)
+            
+            self.train_loss_tb = tf.summary.scalar("train_loss", self.loss)
+            self.val_loss_tb = tf.summary.scalar("val_loss", self.loss)
         
 
     def setup_embeddings(self):
@@ -525,6 +537,46 @@ class QASystem(object):
                 logging.info("Ground Truth: {}, Our Answer: {}".format(ground_truth, our_answer))
 
         return f1, exact_match
+
+    def validate(self,session, batch):
+        """
+        Does not perform any training update.
+        :return:
+        """
+        val_qs, val_q_masks, val_ps, val_p_masks, val_spans, val_answers = zip(*batch)    # Unzip batch, each returned element is a tuple of lists
+
+        input_feed = {}
+
+        start_answers = [val_span[0] for val_span in list(val_spans)]
+        end_answers = [val_span[1] for val_span in list(val_spans)]
+
+        input_feed[self.question_placeholder] = np.array(list(val_qs))
+        input_feed[self.paragraph_placeholder] = np.array(list(val_ps))
+        input_feed[self.start_answer_placeholder] = np.array(start_answers)
+        input_feed[self.end_answer_placeholder] = np.array(end_answers)
+        input_feed[self.paragraph_mask_placeholder] = np.array(list(val_p_masks))
+        input_feed[self.paragraph_length] = np.sum(list(val_p_masks), axis = 1)   # Sum and make into a list
+        input_feed[self.question_length] = np.sum(list(val_q_masks), axis = 1)    # Sum and make into a list
+        input_feed[self.dropout_placeholder] = self.FLAGS.dropout
+        input_feed[self.cell_initial_placeholder] = np.zeros((len(val_qs), self.FLAGS.state_size))
+
+        output_feed = []
+
+        #output_feed.append(self.train_op)
+        output_feed.append(self.loss)
+        output_feed.append(self.global_norm)
+        output_feed.append(self.global_step)
+
+       
+        if self.FLAGS.tb is True:
+            output_feed.append(self.val_loss_tb)
+            loss, norm, step, val_tb = session.run(output_feed, input_feed)
+            self.tensorboard_writer.add_summary(val_tb, step)
+        else:
+            loss, norm, step = session.run(output_feed, input_feed) 
+
+        return loss, norm, step
+
     
 
     def optimize(self, session, batch):
@@ -559,9 +611,13 @@ class QASystem(object):
 
        
         if self.FLAGS.tb is True:
-            output_feed.append(self.tb_vars)
-            tr, loss, norm, step, summary = session.run(output_feed, input_feed)
-            self.tensorboard_writer.add_summary(summary, step)
+            output_feed.append(self.train_loss_tb)
+            output_feed.append(self.global_norm_tb)
+            output_feed.append(self.learning_rate_tb)
+            tr, loss, norm, step, train_tb, norm_tb, lr_tb = session.run(output_feed, input_feed)
+            self.tensorboard_writer.add_summary(train_tb, step)
+            self.tensorboard_writer.add_summary(norm_tb, step)
+            self.tensorboard_writer.add_summary(lr_tb, step)
         else:
             tr, loss, norm, step = session.run(output_feed, input_feed) 
 
@@ -586,8 +642,7 @@ class QASystem(object):
         :return:
         """
         if self.FLAGS.tb is True:
-            tensorboard_path = os.path.join(self.FLAGS.log_dir, "tensorboard")
-            self.tb_vars = tf.summary.merge_all()        
+            tensorboard_path = os.path.join(self.FLAGS.log_dir, "tensorboard")       
             self.tensorboard_writer = tf.summary.FileWriter(tensorboard_path, session.graph)
 
         tic = time.time()
@@ -607,7 +662,7 @@ class QASystem(object):
         early_stopping_path = os.path.join(checkpoint_path, "early_stopping")
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
-        dev_data = zip(dataset["val_questions"], dataset["val_questions_mask"], dataset["val_context"], dataset["val_context_mask"], dataset["val_span"], dataset["val_answer"])
+        val_data = zip(dataset["val_questions"], dataset["val_questions_mask"], dataset["val_context"], dataset["val_context_mask"], dataset["val_span"], dataset["val_answer"])
         
         #get rid of too long answers
         train_data = [d for d in train_data if d[4][1] < self.FLAGS.max_paragraph_size]
@@ -619,18 +674,33 @@ class QASystem(object):
         rolling_ave_window = 50
         losses = [10]*rolling_ave_window
 
-        # Hack to only once cut out too big of samples
+        val_loss_window = 10
+        validate_on_every = 10
+        val_losses = [10]*val_loss_window
+
         for cur_epoch in range(self.FLAGS.epochs):
             batches, num_batches = get_batches(train_data, self.FLAGS.batch_size)
+            val_batches, num_val_batches = get_batches(val_data, self.FLAGS.batch_size*2)#*validate_on_every)
             for i, batch in enumerate(batches):
+                #Optimatize using batch
                 loss, norm, step = self.optimize(session, batch)
                 losses[step % rolling_ave_window] = loss
-
                 mean_loss = np.mean(losses)
+
+                #Use current model on val data
+                if (i%validate_on_every == 0):
+                    val_loss, val_norm, val_step = self.validate(session, val_batches[i%num_val_batches])
+                    val_losses[step % val_loss_window] = val_loss
+                    mean_val_loss = np.mean(val_losses)
+                
+                #Print relevant params
                 num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
-                sys.stdout.write('\r')
-                sys.stdout.write("EPOCH: %d ==> (Rolling Ave Loss: %.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm))
-                sys.stdout.flush()
+                if not self.FLAGS.background:
+                    sys.stdout.write('\r')
+                    sys.stdout.write("EPOCH: %d ==> (Avg Loss: [Train: %.3f][Val: %.3f] <--> Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f] [Step: %d]" % (cur_epoch + 1, mean_loss, mean_val_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm, step))
+                    sys.stdout.flush()
+                else:
+                    logging.info("EPOCH: %d ==> (Avg Loss: [Train: %.3f][Val: %.3f] <--> Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f] [Step: %d]" % (cur_epoch + 1, mean_loss, mean_val_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm, step))
 
             sys.stdout.write('\n')
             
@@ -638,12 +708,12 @@ class QASystem(object):
             if not os.path.exists(checkpoint_path):
                 os.makedirs(checkpoint_path)
             save_path = saver.save(session, os.path.join(checkpoint_path, "model.ckpt"), step)
-            print("Model checkpoint saved in file: %s" % save_path)
+            logging.info("Model checkpoint saved in file: %s" % save_path)
 
             logging.info("---------- Evaluating on Train Set ----------")
             self.evaluate_answer(session, train_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
-            logging.info("---------- Evaluating on Dev Set ------------")
-            f1, em = self.evaluate_answer(session, dev_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
+            logging.info("---------- Evaluating on Val Set ------------")
+            f1, em = self.evaluate_answer(session, val_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
 
             # Save best model based on F1 (Early Stopping)
             if f1 > best_f1:
@@ -651,6 +721,6 @@ class QASystem(object):
                 if not os.path.exists(early_stopping_path):
                     os.makedirs(early_stopping_path)
                 save_path = saver.save(session, os.path.join(early_stopping_path, "best_model.ckpt"))
-                print("New Best F1 Score: %f !!! Best Model saved in file: %s" % (best_f1, save_path))
+                logging.info("New Best F1 Score: %f !!! Best Model saved in file: %s" % (best_f1, save_path))
 
 
