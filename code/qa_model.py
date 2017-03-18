@@ -566,7 +566,7 @@ class QASystem(object):
         input_feed[self.question_length] = np.sum(list(train_q_masks), axis = 1)    # Sum and make into a list
         input_feed[self.dropout_placeholder] = self.FLAGS.dropout
         input_feed[self.cell_initial_placeholder] = np.zeros((len(train_qs), self.FLAGS.state_size))
-        input_feed[self.train_bool] = "Train_Loss"
+        input_feed[self.train_or_val] = "Train_Loss"
 
         output_feed = []
 
