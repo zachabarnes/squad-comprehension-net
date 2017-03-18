@@ -39,20 +39,22 @@ class MatchLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
     """
     Extension of LSTM cell to do matching and magic. Designed to be fed to dynammic_rnn
     """
-    def __init__(self, hidden_size, HQ, FLAGS):
+    def __init__(self, hidden_size, HQ, FLAGS, params):
          # Uniform distribution, as opposed to xavier, which is normal
         self.HQ = HQ
         self.hidden_size = hidden_size
         self.FLAGS = FLAGS
 
         l, P, Q = self.hidden_size, self.FLAGS.max_paragraph_size, self.FLAGS.max_question_size
-        self.WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) 
-        self.WP = tf.get_variable("WP", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
-        self.WR = tf.get_variable("WR", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
+        # self.WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) 
+        # self.WP = tf.get_variable("WP", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
+        # self.WR = tf.get_variable("WR", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
 
-        self.bP = tf.Variable(tf.zeros([1, l]))
-        self.w = tf.Variable(tf.zeros([l,1])) 
-        self.b = tf.Variable(tf.zeros([1,1]))
+        # self.bP = tf.Variable(tf.zeros([1, l]))
+        # self.w = tf.Variable(tf.zeros([l,1])) 
+        # self.b = tf.Variable(tf.zeros([1,1]))
+
+        self.WQ, self.WP, self.WR, self.bP, self.w, self.b = params        
 
         # Calculate term1 by resphapeing to l
         HQ_shaped = tf.reshape(HQ, [-1, l])
@@ -126,6 +128,19 @@ class Encoder(object):
         self.vocab_dim = vocab_dim
         self.FLAGS = FLAGS
 
+    def init_params(self, l, P, Q):
+        self.WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) 
+        self.WP = tf.get_variable("WP", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
+        self.WR = tf.get_variable("WR", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
+
+        self.bP = tf.Variable(tf.zeros([1, l]))
+        self.w = tf.Variable(tf.zeros([l,1])) 
+        self.b = tf.Variable(tf.zeros([1,1]))
+
+        params = [self.WQ, self.WP, self.WR, self.bP, self.w, self.b]
+
+        return params
+
     def encode(self, input_question, input_paragraph, question_length, paragraph_length, dropout_rate, encoder_state_input = None):    # LSTM Preprocessing and Match-LSTM Layers
         """
         Description:
@@ -157,16 +172,18 @@ class Encoder(object):
         Q = self.FLAGS.max_question_size
         P = self.FLAGS.max_paragraph_size
 
+        params = self.init_params(l,Q,P)
+
         # Initialize forward and backward matching LSTMcells with same matching params
         with tf.variable_scope("forward"):
-            cell_f = MatchLSTMCell(l, HQ, self.FLAGS) 
+            cell_f = MatchLSTMCell(l, HQ, self.FLAGS, params) 
 
             if (self.FLAGS.deep):
                 cell_f = [cell_f] + [tf.nn.rnn_cell.BasicLSTMCell(self.size)]*2
                 cell_f = tf.nn.rnn_cell.MultiRNNCell(cell_f)
 
         with tf.variable_scope("backward"):
-            cell_b = MatchLSTMCell(l, HQ, self.FLAGS)
+            cell_b = MatchLSTMCell(l, HQ, self.FLAGS, params)
 
             if (self.FLAGS.deep):
                 cell_b = [cell_b] + [tf.nn.rnn_cell.BasicLSTMCell(self.size)]*2
@@ -654,7 +671,7 @@ class QASystem(object):
                 #Use current model on val data
                 if (i%validate_on_every == 0):
                     val_loss, val_norm, val_step = self.validate(session, val_batches[i%num_val_batches])
-                    val_losses[step % val_loss_window] = val_loss
+                    val_losses[int((step/validate_on_every) % val_loss_window)] = val_loss
                     mean_val_loss = np.mean(val_losses)
                 
                 #Print relevant params
