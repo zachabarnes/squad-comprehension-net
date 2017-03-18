@@ -179,7 +179,8 @@ class Encoder(object):
         HR = tf.concat(2,[HR_right, HR_left])
         assert HR.get_shape().as_list() == [None, P, 2*l]   
 
-        HR = tf.nn.dropout(HR, dropout_rate/2.0)
+        dropout_rate2 = (1 - dropout_rate)/2.0 + dropout_rate
+        HR = tf.nn.dropout(HR, dropout_rate2)
 
         return HR
 
@@ -520,7 +521,7 @@ class QASystem(object):
         input_feed[self.paragraph_mask_placeholder] = np.array(list(val_p_masks))
         input_feed[self.paragraph_length] = np.sum(list(val_p_masks), axis = 1)   # Sum and make into a list
         input_feed[self.question_length] = np.sum(list(val_q_masks), axis = 1)    # Sum and make into a list
-        input_feed[self.dropout_placeholder] = 1
+        input_feed[self.dropout_placeholder] = self.FLAGS.dropout
         input_feed[self.cell_initial_placeholder] = np.zeros((len(val_qs), self.FLAGS.state_size))
 
         output_feed = []
