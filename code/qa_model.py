@@ -381,11 +381,12 @@ class QASystem(object):
         data_size = 5000
         batch_size = 32
         total_batches = int(math.ceil(float(data_size)/32))
+	if batch_num == 16:
+	    total_batches = 40
         batch_dict = {'qs':[], 'ps':[], 'p_masks':[], 'q_masks':[], 'span':[], 'true_answer':[]}
         for batch in xrange(0,total_batches):
             start_ind = batch_num*data_size + batch*batch_size
             end_ind = min(batch_num*data_size + (batch+1)*batch_size, batch_num*data_size + data_size)
-            end_ind = min(end_ind, len(train_data))
             for key in batch_dict.keys():
                 batch_dict[key].append([])
             for qs, q_masks, ps, p_masks, span, true_answer in train_data[start_ind:end_ind]:

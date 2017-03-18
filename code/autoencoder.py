@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 
 """ Auto Encoder Example.
@@ -24,7 +25,7 @@ class data_wrapper:
 #        self.inputs = input_mats
         self.batch_size = batch_size
         self.cur_batch = 0
-        self.total_batch = int(len(self.inputs)/batch_size-1)
+        self.total_batch = 5000
 	self.num_files = num_files
 
     def read_file(self):
@@ -36,11 +37,21 @@ class data_wrapper:
 
     def get_next_batch(self):
         val = self.inputs[self.cur_batch*self.batch_size:self.cur_batch*self.batch_size+self.batch_size]
+#	print(self.cur_batch)
+#	print(self.cur_batch*self.batch_size,self.cur_batch*self.batch_size+self.batch_size,len(self.inputs))
+        self.cur_batch += 1
+        if self.cur_batch*self.batch_size+self.batch_size > len(self.inputs):
+            self.cur_batch = 0
+        return val,val
+
+    def get_answer_batch(self):
+        val = self.inputs[self.cur_batch*self.batch_size:self.cur_batch*self.batch_size+self.batch_size]
 #	print(self.cur_batch*self.batch_size,self.cur_batch*self.batch_size+self.batch_size,len(self.inputs))
         self.cur_batch += 1
         if self.cur_batch*self.batch_size+self.batch_size+200 >= len(self.inputs):
             self.cur_batch = 0
         return val,val
+	
 
     def get_unseen_data(self):
         val = self.inputs[-200:]
@@ -52,7 +63,7 @@ class data_wrapper:
             self.cur_file = 0
         self.file_name = self.file_head + str(self.cur_file) + '.npz'
         self.inputs = self.read_file()
-        self.total_batch = int(len(self.inputs)/self.batch_size-1)
+        self.total_batch = 5000
         self.cur_batch = 0
 
 class autoencoder:
@@ -104,8 +115,8 @@ class autoencoder:
             'decoder_b3': tf.Variable(tf.random_normal([1,self.n_input_2])),
         }
         # Construct model
-        encoder_op = self.encoder(self.X)
-        self.decoder_op = self.decoder(encoder_op)
+        self.encoder_op = self.encoder(self.X)
+        self.decoder_op = self.decoder(self.encoder_op)
 
         # Prediction
         y_pred = self.decoder_op
@@ -180,27 +191,27 @@ class autoencoder:
 
 
     def answer(self):
-        self.saver.restore(sess, "data/autoencoder_weights/autoencoder.ckpt")
 
         result = []
         init = tf.global_variables_initializer()
         # Launch the graph
         with tf.Session() as sess:
-            sess.run(init)
+	    self.saver.restore(sess, "data/autoencoder_weights/autoencoder.ckpt")
+#            sess.run(init)
             total_batch = self.my_data.total_batch
             # Training cycle
             count = 0
-            for epoch in range(self.training_epochs):
-                # Loop over all batches
-                epoch_cost = []
-                for i in range(total_batch):
-                    batch_xs, batch_ys = self.my_data.get_next_batch()
-                    # Run optimization op (backprop) and cost op (to get loss value)
-                    output_feed = [self.decoder_op]
-                    input_feed = {self.X: batch_xs, self.dropout_placeholder: self.dropout}
-                    decoded = sess.run(output_feed, input_feed)
-                    result.extend(decoded)
-        np.savez('data/encoded_hr',data='result')
+            for i in xrange(0,total_batch):
+                batch_xs, batch_ys = self.my_data.get_next_batch()
+                # Run optimization op (backprop) and cost op (to get loss value)
+                output_feed = [self.encoder_op]
+                input_feed = {self.X: batch_xs, self.dropout_placeholder: self.dropout}
+                decoded = sess.run(output_feed, input_feed)
+                result.extend(decoded)
+	print(len(result))
+	result = np.reshape(result, (5000,300*20))
+	save_file = '/mnt/encoded_files/encoded' + str(self.my_data.cur_file)
+        np.savez(save_file,data=result)
 
 
     def train(self):
@@ -242,11 +253,11 @@ class autoencoder:
             print("Optimization Finished!")
             save_path = self.saver.save(sess, "data/autoencoder_weights/autoencoder.ckpt")
 
-
-a = autoencoder('data/encodings',8)
-a.train()
-
-
+a = autoencoder('/mnt/npz_files/encodings',16)
+#a.train()
+for i in xrange(0,16):
+	a.answer()
+	a.my_data.get_new_data()
 
 
 
