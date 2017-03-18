@@ -293,7 +293,6 @@ class QASystem(object):
         self.question_length = tf.placeholder(tf.int32, (None), name="question_length")
         self.cell_initial_placeholder = tf.placeholder(tf.float32, (None, self.FLAGS.state_size), name="cell_init")
         self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
-        self.train_or_val = tf.placeholder(tf.string, (), name="train_or_val")
 
         # ==== assemble pieces ====
         with tf.variable_scope("qa", initializer=tf.uniform_unit_scaling_initializer(1.0)):
@@ -305,7 +304,7 @@ class QASystem(object):
         # ==== set up training/updating procedure ==
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
         self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 10000, decay_rate = 0.95, staircase=True)
-        tf.summary.scalar("learning_rate", self.decayed_rate)
+        self.learning_rate_tb = tf.summary.scalar("learning_rate", self.decayed_rate)
         optimizer = opt_function(self.decayed_rate)
 
         grads_and_vars = optimizer.compute_gradients(self.loss, tf.trainable_variables())
@@ -314,7 +313,7 @@ class QASystem(object):
         variables = [v for g, v in grads_and_vars]
 
         clipped_grads, self.global_norm = tf.clip_by_global_norm(grads, self.FLAGS.max_gradient_norm)
-        tf.summary.scalar("global_norm", self.global_norm)
+        self.global_norm_tb = tf.summary.scalar("global_norm", self.global_norm)
         self.train_op = optimizer.apply_gradients(zip(clipped_grads, variables), global_step = self.global_step, name = "apply_clipped_grads")
 
         self.saver = tf.train.Saver(tf.global_variables())
@@ -364,9 +363,9 @@ class QASystem(object):
             l1 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_s, self.start_answer_placeholder)
             l2 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_e, self.end_answer_placeholder)
             self.loss = tf.reduce_mean(l1+l2)
-            self.val_loss = self.loss
             
-            tf.summary.scalar(self.train_or_val, self.loss)
+            self.train_loss_tb = tf.summary.scalar("train_loss", self.loss)
+            self.val_loss_tb = tf.summary.scalar("val_loss", self.loss)
         
 
     def setup_embeddings(self):
@@ -523,7 +522,6 @@ class QASystem(object):
         input_feed[self.question_length] = np.sum(list(val_q_masks), axis = 1)    # Sum and make into a list
         input_feed[self.dropout_placeholder] = 1
         input_feed[self.cell_initial_placeholder] = np.zeros((len(val_qs), self.FLAGS.state_size))
-        input_feed[self.train_or_val] = "Val_Loss"
 
         output_feed = []
 
@@ -534,9 +532,9 @@ class QASystem(object):
 
        
         if self.FLAGS.tb is True:
-            output_feed.append(self.tb_vars)
-            loss, norm, step, summary = session.run(output_feed, input_feed)
-            self.tensorboard_writer.add_summary(summary, step)
+            output_feed.append(self.val_loss_tb)
+            loss, norm, step, val_tb = session.run(output_feed, input_feed)
+            self.tensorboard_writer.add_summary(val_tb, step)
         else:
             loss, norm, step = session.run(output_feed, input_feed) 
 
@@ -566,7 +564,6 @@ class QASystem(object):
         input_feed[self.question_length] = np.sum(list(train_q_masks), axis = 1)    # Sum and make into a list
         input_feed[self.dropout_placeholder] = self.FLAGS.dropout
         input_feed[self.cell_initial_placeholder] = np.zeros((len(train_qs), self.FLAGS.state_size))
-        input_feed[self.train_or_val] = "Train_Loss"
 
         output_feed = []
 
@@ -577,9 +574,13 @@ class QASystem(object):
 
        
         if self.FLAGS.tb is True:
-            output_feed.append(self.tb_vars)
-            tr, loss, norm, step, summary = session.run(output_feed, input_feed)
-            self.tensorboard_writer.add_summary(summary, step)
+            output_feed.append(self.train_loss_tb)
+            output_feed.append(self.global_norm_tb)
+            output_feed.append(self.learning_rate_tb)
+            tr, loss, norm, step, train_tb, norm_tb, lr_tb = session.run(output_feed, input_feed)
+            self.tensorboard_writer.add_summary(train_tb, step)
+            self.tensorboard_writer.add_summary(norm_tb, step)
+            self.tensorboard_writer.add_summary(lr_tb, step)
         else:
             tr, loss, norm, step = session.run(output_feed, input_feed) 
 
@@ -604,8 +605,7 @@ class QASystem(object):
         :return:
         """
         if self.FLAGS.tb is True:
-            tensorboard_path = os.path.join(self.FLAGS.log_dir, "tensorboard")
-            self.tb_vars = tf.summary.merge_all()        
+            tensorboard_path = os.path.join(self.FLAGS.log_dir, "tensorboard")       
             self.tensorboard_writer = tf.summary.FileWriter(tensorboard_path, session.graph)
 
         tic = time.time()
