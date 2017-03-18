@@ -164,10 +164,30 @@ class Encoder(object):
         (HR_right, HR_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_f, cell_b, HP, sequence_length = paragraph_length, dtype = tf.float32)
         
         ### Append the two things calculated above into H^R
-        HR = tf.concat(2,[HR_right, HR_left])
-        assert HR.get_shape().as_list() == [None, P, 2*l]
+
+        HR_right = tf.nn.dropout(HR_right, dropout_rate)
+        HR_left = tf.nn.dropout(HR_left, dropout_rate)
+
+        if (self.FLAGS.deep):
+            deep_layers = 2
+            with tf.variable_scope("deep_forward"):
+                cell_deep_f = tf.nn.rnn_cell.BasicLSTMCell(self.size)
+                multi_cell_deep_f = tf.nn.rnn_cell.MultiRNNCell([cell_deep_f]*deep_layers)
+                HR_right,_ = tf.nn.dynamic_rnn(cell_deep_f, HR_right, sequence_length = paragraph_length, dtype=tf.float32)
+            
+            with tf.variable_scope("deep_backward"):
+                cell_deep_b = tf.nn.rnn_cell.BasicLSTMCell(self.size)
+                multi_cell_deep_b = tf.nn.rnn_cell.MultiRNNCell([cell_deep_b]*deep_layers)
+                #Hack in need of fix
+                HR_left,_ = tf.nn.dynamic_rnn(cell_deep_f, tf.reverse(HR_left,[False,True,False]), dtype=tf.float32)
+                HR_left = tf.reverse(HR_left, [False, True, False])
+            #Add dropout again
+            HR_right = tf.nn.dropout(HR_right, dropout_rate)
+            HR_left = tf.nn.dropout(HR_left, dropout_rate)
         
-        HR = tf.nn.dropout(HR, dropout_rate)
+        HR = tf.concat(2,[HR_right, HR_left])
+        assert HR.get_shape().as_list() == [None, P, 2*l]   
+
         return HR
 
 class Decoder(object):
@@ -489,6 +509,47 @@ class QASystem(object):
                 logging.info("Ground Truth: {}, Our Answer: {}".format(ground_truth, our_answer))
 
         return f1, exact_match
+
+    def validate(self,session, batch):
+        """
+        Takes in actual data to optimize your model
+        This method is equivalent to a step() function
+        :return:
+        """
+        val_qs, val_q_masks, val_ps, val_p_masks, val_spans, val_answers = zip(*batch)    # Unzip batch, each returned element is a tuple of lists
+
+        input_feed = {}
+
+        start_answers = [val_span[0] for val_span in list(val_spans)]
+        end_answers = [val_span[1] for val_span in list(val_spans)]
+
+        input_feed[self.question_placeholder] = np.array(list(val_qs))
+        input_feed[self.paragraph_placeholder] = np.array(list(val_ps))
+        input_feed[self.start_answer_placeholder] = np.array(start_answers)
+        input_feed[self.end_answer_placeholder] = np.array(end_answers)
+        input_feed[self.paragraph_mask_placeholder] = np.array(list(val_p_masks))
+        input_feed[self.paragraph_length] = np.sum(list(val_p_masks), axis = 1)   # Sum and make into a list
+        input_feed[self.question_length] = np.sum(list(val_q_masks), axis = 1)    # Sum and make into a list
+        input_feed[self.dropout_placeholder] = 1
+        input_feed[self.cell_initial_placeholder] = np.zeros((len(val_qs), self.FLAGS.state_size))
+
+        output_feed = []
+
+        #output_feed.append(self.train_op)
+        output_feed.append(self.loss)
+        output_feed.append(self.global_norm)
+        output_feed.append(self.global_step)
+
+       
+        if self.FLAGS.tb is True:
+            output_feed.append(self.tb_vars)
+            loss, norm, step, summary = session.run(output_feed, input_feed)
+            self.tensorboard_writer.add_summary(summary, step)
+        else:
+            loss, norm, step = session.run(output_feed, input_feed) 
+
+        return loss, norm, step
+
     
 
     def optimize(self, session, batch):
@@ -571,7 +632,7 @@ class QASystem(object):
         early_stopping_path = os.path.join(checkpoint_path, "early_stopping")
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
-        dev_data = zip(dataset["val_questions"], dataset["val_questions_mask"], dataset["val_context"], dataset["val_context_mask"], dataset["val_span"], dataset["val_answer"])
+        val_data = zip(dataset["val_questions"], dataset["val_questions_mask"], dataset["val_context"], dataset["val_context_mask"], dataset["val_span"], dataset["val_answer"])
         
         #get rid of too long answers
         train_data = [d for d in train_data if d[4][1] < self.FLAGS.max_paragraph_size]
@@ -583,17 +644,29 @@ class QASystem(object):
         rolling_ave_window = 50
         losses = [10]*rolling_ave_window
 
-        # Hack to only once cut out too big of samples
+        val_loss_window = 10
+        validate_on_every = 10
+        val_losses = [10]*val_loss_window
+
         for cur_epoch in range(self.FLAGS.epochs):
             batches, num_batches = get_batches(train_data, self.FLAGS.batch_size)
+            val_batches, num_val_batches = get_batches(val_data, self.FLAGS.batch_size*2)#*validate_on_every)
             for i, batch in enumerate(batches):
+                #Optimatize using batch
                 loss, norm, step = self.optimize(session, batch)
                 losses[step % rolling_ave_window] = loss
-
                 mean_loss = np.mean(losses)
+
+                #Use current model on val data
+                if (i%validate_on_every == 0):
+                    val_loss, val_norm, val_step = self.validate(session, val_batches[i%num_val_batches])
+                    val_losses[step % val_loss_window] = val_loss
+                    mean_val_loss = np.mean(val_losses)
+                
+                #Print relevant params
                 num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                 sys.stdout.write('\r')
-                sys.stdout.write("EPOCH: %d ==> (Rolling Ave Loss: %.3f, Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f]" % (cur_epoch + 1, mean_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm))
+                sys.stdout.write("EPOCH: %d ==> (Rolling Ave Loss: %.3f [Val Loss: %.3f] --> Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f]" % (cur_epoch + 1, mean_loss, mean_val_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm))
                 sys.stdout.flush()
 
             sys.stdout.write('\n')
@@ -606,8 +679,8 @@ class QASystem(object):
 
             logging.info("---------- Evaluating on Train Set ----------")
             self.evaluate_answer(session, train_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
-            logging.info("---------- Evaluating on Dev Set ------------")
-            f1, em = self.evaluate_answer(session, dev_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
+            logging.info("---------- Evaluating on Val Set ------------")
+            f1, em = self.evaluate_answer(session, val_data, rev_vocab, sample=self.FLAGS.eval_size, log=True)
 
             # Save best model based on F1 (Early Stopping)
             if f1 > best_f1:

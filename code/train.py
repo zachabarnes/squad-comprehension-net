@@ -37,6 +37,7 @@ tf.app.flags.DEFINE_string("run_name", "", "A name to give the run. For checkpoi
 tf.app.flags.DEFINE_bool("tb", False, "Log Tensorboard Graph")
 tf.app.flags.DEFINE_bool("search", False, "Whether to use advanced search methods")
 tf.app.flags.DEFINE_bool("bi_ans", False, "Whether to use advanced bidirectional ans-ptr method")
+tf.app.flags.DEFINE_bool("deep", False, "Whether to use advanced deep layer between match and ans-ptr")
 
 # tf.app.flags.DEFINE_integer("keep", 0, "How many checkpoints to keep, 0 indicates keep all.")
 FLAGS = tf.app.flags.FLAGS
