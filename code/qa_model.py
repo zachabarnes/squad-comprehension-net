@@ -661,9 +661,10 @@ class QASystem(object):
                 num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                 if not self.FLAGS.background:
                     sys.stdout.write('\r')
-                sys.stdout.write("EPOCH: %d ==> (Avg Loss: [Train: %.3f][Val: %.3f] <--> Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f] [Step: %d]" % (cur_epoch + 1, mean_loss, mean_val_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm, step))
-                if not self.FLAGS.background:
+                    sys.stdout.write("EPOCH: %d ==> (Avg Loss: [Train: %.3f][Val: %.3f] <--> Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f] [Step: %d]" % (cur_epoch + 1, mean_loss, mean_val_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm, step))
                     sys.stdout.flush()
+                else:
+                    logging.info("EPOCH: %d ==> (Avg Loss: [Train: %.3f][Val: %.3f] <--> Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f] [Step: %d]" % (cur_epoch + 1, mean_loss, mean_val_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm, step))
 
             sys.stdout.write('\n')
             
