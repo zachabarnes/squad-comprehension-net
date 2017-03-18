@@ -160,6 +160,7 @@ class Encoder(object):
 
             if (self.FLAGS.deep):
                 cell_f = [cell_f] + [tf.nn.rnn_cell.BasicLSTMCell(self.size)]*2
+                cell_f = tf.nn.rnn_cell.DropoutWrapper(cell_f, output_keep_prob=dropout_rate)
                 cell_f = tf.nn.rnn_cell.MultiRNNCell(cell_f)
 
         with tf.variable_scope("backward"):
@@ -167,6 +168,7 @@ class Encoder(object):
 
             if (self.FLAGS.deep):
                 cell_b = [cell_b] + [tf.nn.rnn_cell.BasicLSTMCell(self.size)]*2
+                cell_b = tf.nn.rnn_cell.DropoutWrapper(cell_b, output_keep_prob=dropout_rate)
                 cell_b = tf.nn.rnn_cell.MultiRNNCell(cell_b)
 
         # Calculate encodings for both forward and backward directions
