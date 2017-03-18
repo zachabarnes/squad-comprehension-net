@@ -655,7 +655,7 @@ class QASystem(object):
         rolling_ave_window = 50
         losses = [10]*rolling_ave_window
 
-        val_loss_window = 10
+        val_loss_window = 5
         validate_on_every = 10
         val_losses = [10]*val_loss_window
 
