@@ -16,17 +16,22 @@ import numpy as np
 
 
 class data_wrapper:
-    def __init__(self, input_mats, batch_size):
-        #self.file_name = file_name
-        #self.inputs = self.read_file()
-        self.inputs = input_mats
+    def __init__(self, file_name, num_files, batch_size):
+        self.cur_file = 0
+	self.file_head = file_name
+        self.file_name = file_name + str(self.cur_file) + '.npz'
+        self.inputs = self.read_file()
+#        self.inputs = input_mats
         self.batch_size = batch_size
         self.cur_batch = 0
         self.total_batch = int(len(self.inputs)/batch_size-1)
+	self.num_files = num_files
 
     def read_file(self):
+        print("reading file: ", self.file_name)
         inputs = np.load(self.file_name)
         inputs = inputs['data']
+        print("read file, performing epoch")
         return inputs
 
     def get_next_batch(self):
@@ -41,10 +46,19 @@ class data_wrapper:
         val = self.inputs[-200:]
     	return val,val
 
+    def get_new_data(self):
+        self.cur_file += 1
+        if self.cur_file == self.num_files:
+            self.cur_file = 0
+        self.file_name = self.file_head + str(self.cur_file) + '.npz'
+        self.inputs = self.read_file()
+        self.total_batch = int(len(self.inputs)/self.batch_size-1)
+        self.cur_batch = 0
+
 class autoencoder:
-    def __init__(self, input_mats):
+    def __init__(self, file_name, num_files):
         # Parameters
-        self.learning_rate = 0.02
+        self.learning_rate = 0.01
 
         self.training_epochs = 40
         self.batch_size = 1
@@ -55,13 +69,13 @@ class autoencoder:
         # Network Parameters
         self.n_hidden_3 = 20 # 2nd layer num features
         self.n_hidden_2 = 100
-	self.n_hidden_1 = 200 # 1st layer num features
+        self.n_hidden_1 = 200 # 1st layer num features
 
         self.n_input_1 = 300 # data dimension 1 
         self.n_input_2 = 300 # data dimension 2
 
         # Data Class
-        self.my_data = data_wrapper(input_mats, self.batch_size)
+        self.my_data = data_wrapper(file_name, num_files, self.batch_size)
 
         self.setup()
         self.saver = tf.train.Saver()
@@ -223,15 +237,13 @@ class autoencoder:
                     input_feed = {self.X: batch_xs, self.dropout_placeholder: 1}
                     c = sess.run(output_feed, input_feed)
                     print("Unseen data loss: ",c)
+                self.my_data.get_new_data()
 
             print("Optimization Finished!")
             save_path = self.saver.save(sess, "data/autoencoder_weights/autoencoder.ckpt")
 
-print("loading 1st datafile")
-my_data = np.load('data/encodings0.npz')['data']
-print("loading 2nd datafile")
-my_data = np.concatenate((my_data,np.load('data/encodings1.npz')['data']),axis=0)
-a = autoencoder(my_data)
+
+a = autoencoder('data/encodings',8)
 a.train()
 
 
