@@ -157,8 +157,17 @@ class Encoder(object):
         # Initialize forward and backward matching LSTMcells with same matching params
         with tf.variable_scope("forward"):
             cell_f = MatchLSTMCell(l, HQ, self.FLAGS) 
+
+            if (self.FLAGS.deep):
+                cell_f = [cell_f] + [tf.nn.rnn_cell.BasicLSTMCell(self.size)]*2
+                cell_f = tf.nn.rnn_cell.MultiRNNCell(cell_f)
+
         with tf.variable_scope("backward"):
             cell_b = MatchLSTMCell(l, HQ, self.FLAGS)
+
+            if (self.FLAGS.deep):
+                cell_b = [cell_b] + [tf.nn.rnn_cell.BasicLSTMCell(self.size)]*2
+                cell_b = tf.nn.rnn_cell.MultiRNNCell(cell_b)
 
         # Calculate encodings for both forward and backward directions
         (HR_right, HR_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_f, cell_b, HP, sequence_length = paragraph_length, dtype = tf.float32)
@@ -168,22 +177,6 @@ class Encoder(object):
         HR_right = tf.nn.dropout(HR_right, dropout_rate)
         HR_left = tf.nn.dropout(HR_left, dropout_rate)
 
-        if (self.FLAGS.deep):
-            deep_layers = 2
-            with tf.variable_scope("deep_forward"):
-                cell_deep_f = tf.nn.rnn_cell.BasicLSTMCell(self.size)
-                multi_cell_deep_f = tf.nn.rnn_cell.MultiRNNCell([cell_deep_f]*deep_layers)
-                HR_right,_ = tf.nn.dynamic_rnn(cell_deep_f, HR_right, sequence_length = paragraph_length, dtype=tf.float32)
-            
-            with tf.variable_scope("deep_backward"):
-                cell_deep_b = tf.nn.rnn_cell.BasicLSTMCell(self.size)
-                multi_cell_deep_b = tf.nn.rnn_cell.MultiRNNCell([cell_deep_b]*deep_layers)
-                #Hack in need of fix
-                HR_left,_ = tf.nn.dynamic_rnn(cell_deep_f, tf.reverse(HR_left,[False,True,False]), dtype=tf.float32)
-                HR_left = tf.reverse(HR_left, [False, True, False])
-            #Add dropout again
-            HR_right = tf.nn.dropout(HR_right, dropout_rate)
-            HR_left = tf.nn.dropout(HR_left, dropout_rate)
         
         HR = tf.concat(2,[HR_right, HR_left])
         assert HR.get_shape().as_list() == [None, P, 2*l]   
@@ -666,7 +659,7 @@ class QASystem(object):
                 #Print relevant params
                 num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                 sys.stdout.write('\r')
-                sys.stdout.write("EPOCH: %d ==> (Rolling Ave Loss: %.3f [Val Loss: %.3f] --> Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f]" % (cur_epoch + 1, mean_loss, mean_val_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm))
+                sys.stdout.write("EPOCH: %d ==> (Avg Loss: [Train: %.3f][Val: %.3f] <--> Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f] [Step: %d]" % (cur_epoch + 1, mean_loss, mean_val_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm, step))
                 sys.stdout.flush()
 
             sys.stdout.write('\n')
