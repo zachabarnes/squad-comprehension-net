@@ -293,7 +293,7 @@ class QASystem(object):
         self.question_length = tf.placeholder(tf.int32, (None), name="question_length")
         self.cell_initial_placeholder = tf.placeholder(tf.float32, (None, self.FLAGS.state_size), name="cell_init")
         self.dropout_placeholder = tf.placeholder(tf.float32, (), name="dropout_placeholder")
-        self.train_bool = tf.placeholder(tf.bool, (), name="train_bool")
+        self.train_or_val = tf.placeholder(tf.string, (), name="train_or_val")
 
         # ==== assemble pieces ====
         with tf.variable_scope("qa", initializer=tf.uniform_unit_scaling_initializer(1.0)):
@@ -364,9 +364,9 @@ class QASystem(object):
             l1 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_s, self.start_answer_placeholder)
             l2 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_e, self.end_answer_placeholder)
             self.loss = tf.reduce_mean(l1+l2)
-
+            self.val_loss = self.loss
             
-            #y = tf.cond(self.train_bool, lambda: tf.summary.scalar('train_loss', self.loss), lambda: tf.summary.scalar('val_loss', self.loss))
+            tf.summary.scalar(self.train_or_val, self.loss)
         
 
     def setup_embeddings(self):
@@ -523,7 +523,7 @@ class QASystem(object):
         input_feed[self.question_length] = np.sum(list(val_q_masks), axis = 1)    # Sum and make into a list
         input_feed[self.dropout_placeholder] = 1
         input_feed[self.cell_initial_placeholder] = np.zeros((len(val_qs), self.FLAGS.state_size))
-        input_feed[self.train_bool] = False
+        input_feed[self.train_or_val] = "Val_Loss"
 
         output_feed = []
 
@@ -566,7 +566,7 @@ class QASystem(object):
         input_feed[self.question_length] = np.sum(list(train_q_masks), axis = 1)    # Sum and make into a list
         input_feed[self.dropout_placeholder] = self.FLAGS.dropout
         input_feed[self.cell_initial_placeholder] = np.zeros((len(train_qs), self.FLAGS.state_size))
-        input_feed[self.train_bool] = True
+        input_feed[self.train_bool] = "Train_Loss"
 
         output_feed = []
 
