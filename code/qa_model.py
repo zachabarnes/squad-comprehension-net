@@ -366,7 +366,7 @@ class QASystem(object):
             self.loss = tf.reduce_mean(l1+l2)
 
             
-            y = tf.cond(self.train_bool, lambda: tf.summary.scalar('train_loss', self.loss), lambda: tf.summary.scalar('val_loss', self.loss))
+            #y = tf.cond(self.train_bool, lambda: tf.summary.scalar('train_loss', self.loss), lambda: tf.summary.scalar('val_loss', self.loss))
         
 
     def setup_embeddings(self):
