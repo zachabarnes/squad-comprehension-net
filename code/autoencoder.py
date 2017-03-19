@@ -189,6 +189,7 @@ class autoencoder:
 	print("YOU ARE NOW IN AUTOENCODER_ANSWER")
         with tf.Session() as sess:
             if self.autoencoder_num == 1:
+		print("Attempting to load from data/autoencoder_weights/autoencoder.ckpt")
     	        self.saver.restore(sess, "data/autoencoder_weights/autoencoder.ckpt")
             else:
                 self.saver.restore(sess, "data/autoencoder_weights_2nd/autoencoder.ckpt")

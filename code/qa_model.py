@@ -379,7 +379,6 @@ class QASystem(object):
 #        p_masks = batch_dict['p_masks'][i]
         #print(len(p_masks))
 
-	print("HERHEHEHERHEHREHEHRHE")
 
         input_feed[self.question_placeholder] = np.array(list(qs))
         input_feed[self.paragraph_placeholder] = np.array(list(ps))
@@ -391,7 +390,6 @@ class QASystem(object):
 
         output_feed = [self.Hr]    # Get the softmaxed outputs
 
-	print("HERHEHEREHERHER")
 
         return session.run(output_feed, input_feed)[0]
 

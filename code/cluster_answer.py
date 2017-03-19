@@ -130,7 +130,7 @@ def generate_answers(sess, model, unified_dataset, rev_vocab):
 
     return answers
 
-def autoencode_and_cluster(hr_v):
+def autoencode_and_cluster(hr_values):
     a = autoencoder(hr_values, 1)
     autoencoded = a.answer()
     assert autoencoded.shape[1] == 300
@@ -194,16 +194,18 @@ def generate_hr(sess, model, dataset, rev_vocab):
 
     clustered_hr = []
     hr_v = None
-    for batch in tqdm(batches):
+    first = 1
+    for batch in tqdm(batches[0:3]):
         val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, uuids = zip(*batch)
         hr_values = model.get_hr_for_cluster_answer(sess, val_questions, val_question_masks, val_paragraphs, val_paragraph_masks)
     	print("Generated all hr_values")
     	assert hr_values.shape[1] == 300
     	assert hr_values.shape[2] == 300
-        if hr_v == None:
+        if first == 1:
+	    first = 0
             hr_v = hr_values
         else:
-            hr_v = np.concatenate(hr_v,hr_values)
+            hr_v = np.concatenate((hr_v,hr_values),axis=0)
         assert hr_v.shape[1] == 300
         assert hr_v.shape[2] == 300
     return hr_v
@@ -251,8 +253,9 @@ def main(_):
 
         print("Calculating HR, autoencoding, and clustering")
         hr_v = generate_hr(sess, qa, dataset, rev_vocab)
+	np.savez('data/hr_v_dev',data=hr_v)
 
-    cluster_datasets = autoencode_and_cluster(hr_v, dataset)
+    cluster_datasets = autoencode_and_cluster(hr_v)
 
     for cluster in xrange(0, len(cluster_datasets)):
         qa = QASystem(encoder, decoder, FLAGS)
