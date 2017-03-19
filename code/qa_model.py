@@ -369,6 +369,28 @@ class QASystem(object):
             self.paragraph_embedding = tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder)
             self.question_embedding = tf.nn.embedding_lookup(embeddings,self.question_placeholder)
 
+    def get_hr_for_cluster_answer(self,session,batch_dict):
+        #print(i,total_batches)
+        input_feed = {}
+
+        qs = batch_dict['qs'][i]
+        q_masks = batch_dict['q_masks'][i]
+        ps = batch_dict['ps'][i]
+        p_masks = batch_dict['p_masks'][i]
+        #print(len(p_masks))
+
+        input_feed[self.question_placeholder] = np.array(list(qs))
+        input_feed[self.paragraph_placeholder] = np.array(list(ps))
+        input_feed[self.paragraph_mask_placeholder] = np.array(list(p_masks))
+        input_feed[self.paragraph_length] = np.sum(list(p_masks), axis = 1)   # Sum and make into a list
+        input_feed[self.question_length] = np.sum(list(q_masks), axis = 1)    # Sum and make into a list
+        input_feed[self.cell_initial_placeholder] = np.zeros((len(qs), self.FLAGS.state_size))
+        input_feed[self.dropout_placeholder] = 1
+
+        output_feed = [self.Hr]    # Get the softmaxed outputs
+
+        return session.run(output_feed, input_feed)[0]
+
     def get_hr(self, session, dataset, batch_num):  #Currently still decodes one at a time
         """
         Returns the probability distribution over different positions in the paragraph
@@ -381,8 +403,8 @@ class QASystem(object):
         data_size = 5000
         batch_size = 32
         total_batches = int(math.ceil(float(data_size)/32))
-	if batch_num == 16:
-	    total_batches = 40
+	    if batch_num == 16:
+	        total_batches = 40
         batch_dict = {'qs':[], 'ps':[], 'p_masks':[], 'q_masks':[], 'span':[], 'true_answer':[]}
         for batch in xrange(0,total_batches):
             start_ind = batch_num*data_size + batch*batch_size
@@ -398,14 +420,14 @@ class QASystem(object):
                 batch_dict['true_answer'][-1].append(true_answer)
 
         for i in tqdm(xrange(0,total_batches)):
-            print(i,total_batches)
+            #print(i,total_batches)
             input_feed = {}
 
             qs = batch_dict['qs'][i]
             q_masks = batch_dict['q_masks'][i]
             ps = batch_dict['ps'][i]
             p_masks = batch_dict['p_masks'][i]
-            print(len(p_masks))
+            #print(len(p_masks))
 
             input_feed[self.question_placeholder] = np.array(list(qs))
             input_feed[self.paragraph_placeholder] = np.array(list(ps))

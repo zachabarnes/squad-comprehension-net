@@ -17,16 +17,13 @@ import numpy as np
 
 
 class data_wrapper:
-    def __init__(self, file_name, num_files, batch_size):
+    def __init__(self, input_mats, batch_size):
         self.cur_file = 0
-	self.file_head = file_name
-        self.file_name = file_name + str(self.cur_file) + '.npz'
-        self.inputs = self.read_file()
-#        self.inputs = input_mats
+        self.inputs = input_mats
         self.batch_size = batch_size
         self.cur_batch = 0
-        self.total_batch = 5000
-	self.num_files = num_files
+        self.total_batch = len(input_mats)
+	    self.num_files = num_files
 
     def read_file(self):
         print("reading file: ", self.file_name)
@@ -37,8 +34,6 @@ class data_wrapper:
 
     def get_next_batch(self):
         val = self.inputs[self.cur_batch*self.batch_size:self.cur_batch*self.batch_size+self.batch_size]
-#	print(self.cur_batch)
-#	print(self.cur_batch*self.batch_size,self.cur_batch*self.batch_size+self.batch_size,len(self.inputs))
         self.cur_batch += 1
         if self.cur_batch*self.batch_size+self.batch_size > len(self.inputs):
             self.cur_batch = 0
@@ -46,9 +41,8 @@ class data_wrapper:
 
     def get_answer_batch(self):
         val = self.inputs[self.cur_batch*self.batch_size:self.cur_batch*self.batch_size+self.batch_size]
-#	print(self.cur_batch*self.batch_size,self.cur_batch*self.batch_size+self.batch_size,len(self.inputs))
         self.cur_batch += 1
-        if self.cur_batch*self.batch_size+self.batch_size+200 >= len(self.inputs):
+        if self.cur_batch*self.batch_size+self.batch_size > len(self.inputs):
             self.cur_batch = 0
         return val,val
 	
@@ -67,7 +61,7 @@ class data_wrapper:
         self.cur_batch = 0
 
 class autoencoder:
-    def __init__(self, file_name, num_files):
+    def __init__(self, input_mats, autoencoder_num):
         # Parameters
         self.learning_rate = 0.01
 
@@ -82,11 +76,14 @@ class autoencoder:
         self.n_hidden_2 = 100
         self.n_hidden_1 = 200 # 1st layer num features
 
-        self.n_input_1 = 20 # data dimension 1 
+        self.n_input_1 = 300 # data dimension 1 
+        if autoencoder_num == 2:
+            self.n_input_1 = 20
+
         self.n_input_2 = 300 # data dimension 2
 
         # Data Class
-        self.my_data = data_wrapper(file_name, num_files, self.batch_size)
+        self.my_data = data_wrapper(file_name, input_mats, self.batch_size)
 
         self.setup()
         self.saver = tf.train.Saver()
@@ -196,8 +193,11 @@ class autoencoder:
         init = tf.global_variables_initializer()
         # Launch the graph
         with tf.Session() as sess:
-	    self.saver.restore(sess, "data/autoencoder_weights_2nd/autoencoder.ckpt")
-#            sess.run(init)
+            if autoencoder_num == 1:
+    	        self.saver.restore(sess, "data/autoencoder_weights/autoencoder.ckpt")
+            else:
+                self.saver.restore(sess, "data/autoencoder_weights_2nd/autoencoder.ckpt")
+
             total_batch = self.my_data.total_batch
             # Training cycle
             count = 0
@@ -208,10 +208,13 @@ class autoencoder:
                 input_feed = {self.X: batch_xs, self.dropout_placeholder: self.dropout}
                 decoded = sess.run(output_feed, input_feed)
                 result.extend(decoded)
-	print(len(result))
-	result = np.reshape(result, (5000,50*20))
-	save_file = '/mnt/final_encoded_files/encoded' + str(self.my_data.cur_file)
-        np.savez(save_file,data=result)
+            if autoencoder_num == 1:
+                result = np.reshape(result, (total_batch,300*20))
+                result = np.reshape(result, (total_batch,300,20))
+            else:
+                result = np.reshape(result, (total_batch,50*20))
+                result = np.reshape(result, (total_batch,50,20))
+        return result
 
 
     def train(self):

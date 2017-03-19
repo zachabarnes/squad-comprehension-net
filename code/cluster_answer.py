@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+sfrom __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
@@ -34,7 +34,7 @@ tf.app.flags.DEFINE_integer("state_size", 150, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("embedding_size", 300, "Size of the pretrained vocabulary.")
 tf.app.flags.DEFINE_integer("output_size", 750, "The output size of your model.")
 tf.app.flags.DEFINE_integer("keep", 0, "How many checkpoints to keep, 0 indicates keep all.")
-tf.app.flags.DEFINE_string("train_dir", "train", "Training directory (default: ./train).")
+tf.app.flags.DEFINE_string("train_dir", "train/match-lstm/17-03-2017_07:00:39/early_stopping", "Training directory (default: ./train).")
 tf.app.flags.DEFINE_string("log_dir", "log", "Path to store log and flag files (default: ./log)")
 tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab file (default: ./data/squad/vocab.dat)")
 tf.app.flags.DEFINE_string("embed_path", "", "Path to the trimmed GLoVe embedding (default: ./data/squad/glove.trimmed.{embedding_size}.npz)")
@@ -44,7 +44,7 @@ tf.app.flags.DEFINE_integer("max_question_size", 20, "The length to cut question
 tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
 tf.app.flags.DEFINE_float("max_gradient_norm", 10.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_integer("n_clusters", 3, "The number of clusters we are using")
-tf.app.flags.DEFINE_string("cluster_path", "clusters", "Trained cluster model paramaters.")
+tf.app.flags.DEFINE_string("cluster_path", "cluster", "Trained cluster model paramaters.")
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -159,10 +159,17 @@ def generate_hr(sess, model, dataset, rev_vocab):
     clustered_hr = []
     for batch in tqdm(batches):
         val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, uuids = zip(*batch)
-        hr_values = model.answer(session, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
-        a = autoencoder(hr_values)
+        hr_values = model.get_hr_for_cluster_answer(session, batch)
+        assert hr_values.get_shape().as_list() == [None, 300,300]
+        a = autoencoder(hr_values, 1)
         autoencoded = a.answer()
-        clustered_hr.extend(cluster(autoencoded)) #This should be a vector of cluster assignments
+        assert autoencoded.get_shape().as_list() == [None, 300, 20]
+        b = autoencoder(autoencoded, 2)
+        autoencoded_b = b.answer()
+        assert autoencoded_b.get_shape().as_list() == [None, 50, 20]
+        clustered_hr.extend(cluster(autoencoded_b)) #This should be a vector of cluster assignments
+
+    assert len(clustered_hr) == len(unified_dataset)
 
     cluster_example_indices = [[] for max(clustered_hr)+1]
     for i in xrange(clustered_hr):
@@ -231,7 +238,7 @@ def main(_):
         qa = QASystem(encoder, decoder, FLAGS)
         with tf.Session() as sess:
 
-            train_dir = FLAGS.cluster_path + "/cluster" + str(cluster) + "/train"
+            train_dir = FLAGS.cluster_path + "/cluster" + str(cluster) + "/train/early_stopping/"
             initialize_model(sess, qa, train_dir)
 
             print ("Generating Answers")
