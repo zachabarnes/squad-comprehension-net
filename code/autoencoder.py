@@ -71,18 +71,18 @@ class autoencoder:
         # Parameters
         self.learning_rate = 0.01
 
-        self.training_epochs = 40
+        self.training_epochs = 60
         self.batch_size = 1
         self.display_step = 1
         self.examples_to_show = 10
         self.dropout = .5
 
         # Network Parameters
-        self.n_hidden_3 = 20 # 2nd layer num features
+        self.n_hidden_3 = 50 # 2nd layer num features
         self.n_hidden_2 = 100
         self.n_hidden_1 = 200 # 1st layer num features
 
-        self.n_input_1 = 300 # data dimension 1 
+        self.n_input_1 = 20 # data dimension 1 
         self.n_input_2 = 300 # data dimension 2
 
         # Data Class
@@ -153,7 +153,7 @@ class autoencoder:
         assert layer_3.get_shape().as_list() == [None,self.n_hidden_3]
 
 
-        result = tf.reshape(layer_3,[-1,self.n_input_2,self.n_hidden_3])
+        result = tf.reshape(layer_3,[-1,self.n_input_1,self.n_hidden_3])
         assert result.get_shape().as_list() == [None,self.n_input_1,self.n_hidden_3]
         tf.nn.dropout(result, self.dropout_placeholder)
         return result
@@ -196,7 +196,7 @@ class autoencoder:
         init = tf.global_variables_initializer()
         # Launch the graph
         with tf.Session() as sess:
-	    self.saver.restore(sess, "data/autoencoder_weights/autoencoder.ckpt")
+	    self.saver.restore(sess, "data/autoencoder_weights_2nd/autoencoder.ckpt")
 #            sess.run(init)
             total_batch = self.my_data.total_batch
             # Training cycle
@@ -209,8 +209,8 @@ class autoencoder:
                 decoded = sess.run(output_feed, input_feed)
                 result.extend(decoded)
 	print(len(result))
-	result = np.reshape(result, (5000,300*20))
-	save_file = '/mnt/encoded_files/encoded' + str(self.my_data.cur_file)
+	result = np.reshape(result, (5000,50*20))
+	save_file = '/mnt/final_encoded_files/encoded' + str(self.my_data.cur_file)
         np.savez(save_file,data=result)
 
 
@@ -251,9 +251,9 @@ class autoencoder:
                 self.my_data.get_new_data()
 
             print("Optimization Finished!")
-            save_path = self.saver.save(sess, "data/autoencoder_weights/autoencoder.ckpt")
+            save_path = self.saver.save(sess, "data/autoencoder_weights_2nd/autoencoder.ckpt")
 
-a = autoencoder('/mnt/npz_files/encodings',16)
+a = autoencoder('/mnt/encoded_mat_files/encoded',16)
 #a.train()
 for i in xrange(0,16):
 	a.answer()

@@ -11,7 +11,8 @@ for i in xrange(1,16):
 
 #kmeans = KMeans(n_clusters=3, random_state=0).fit(X)
 
-pca = PCA(n_components = 2).fit(X)
+
+pca = PCA(n_components = 3).fit(X)
 
 t = pca.transform(X)
 

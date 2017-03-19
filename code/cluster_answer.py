@@ -231,7 +231,7 @@ def main(_):
         qa = QASystem(encoder, decoder, FLAGS)
         with tf.Session() as sess:
 
-            train_dir = FLAGS.cluster_path + "/" + str(i) + "train"
+            train_dir = FLAGS.cluster_path + "/cluster" + str(cluster) + "/train"
             initialize_model(sess, qa, train_dir)
 
             print ("Generating Answers")
