@@ -154,7 +154,7 @@ def generate_hr(sess, model, dataset, rev_vocab):
     context_padded, context_masked = pad_inputs(val_context, FLAGS.max_paragraph_size)
 
     unified_dataset = zip(questions_padded, questions_masked, context_padded, context_masked, dataset["val_question_uuids"])
-    batches, num_batches = get_batches(unified_dataset, self.FLAGS.batch_size, False)
+    batches, num_batches = get_batches(unified_dataset, 32, False)
 
     clustered_hr = []
     for batch in tqdm(batches):
