@@ -116,13 +116,14 @@ def generate_answers(sess, model, unified_dataset, rev_vocab):
     :return:
     """
 
-    batches, num_batches = get_batches(unified_dataset, self.FLAGS.batch_size)
+    batches, num_batches = get_batches(unified_dataset, 32)
 
+    answers = {}
     for batch in tqdm(batches):
         val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, uuids = zip(*batch)
-        a_s, a_e = model.answer(session, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
+        a_s, a_e = model.answer(sess, val_questions, val_paragraphs, val_question_masks, val_paragraph_masks)
         for i, (s, e) in enumerate(zip(a_s, a_e)):
-            token_answer = paragraph[s : e + 1]      #The slice of the context paragraph that is our answer
+            token_answer = val_paragraphs[i][s : e + 1]      #The slice of the context paragraph that is our answer
 
             sentence = [rev_vocab[token] for token in token_answer]
             our_answer = ' '.join(word for word in sentence)
@@ -130,34 +131,39 @@ def generate_answers(sess, model, unified_dataset, rev_vocab):
 
     return answers
 
-def autoencode_and_cluster(hr_values):
+def autoencode_and_cluster(hr_values, unified_dataset):
     a = autoencoder(hr_values, 1)
     autoencoded = a.answer()
-    assert autoencoded.shape[1] == 300
-    assert autoencoded.shape[2] == 20
+    autoencoded = np.reshape(autoencoded,(len(autoencoded),20,300))
+    assert autoencoded.shape[1] == 20
+    assert autoencoded.shape[2] == 300
+    tf.reset_default_graph()
     b = autoencoder(autoencoded, 2)
     autoencoded_b = b.answer()
-    assert autoencoded.shape[1] == 50
-    assert autoencoded.shape[2] == 20
-    clustered_hr.extend(cluster(autoencoded_b)) #This should be a vector of cluster assignments
+    assert autoencoded_b.shape[1] == 50
+    assert autoencoded_b.shape[2] == 20
+    clustered_hr = cluster(autoencoded_b)  #This should be a vector of cluster assignments
 
-    assert len(clustered_hr) == len(unified_dataset)
+    print(len(clustered_hr))
+    print(len(unified_dataset))
+#    assert len(clustered_hr) == len(unified_dataset)
 
     cluster_example_indices = [[] for i in xrange(0, max(clustered_hr)+1)]
-    for i in xrange(clustered_hr):
+    for i in xrange(0,len(clustered_hr)):
         cluster_example_indices[clustered_hr[i]].append(i)
 
     cluster_datasets = []
-    for cluster_num in xrange(clustered_hr):
-        if len(clustered_hr[cluster_num]) == 0:
+    for cluster_num in xrange(0,len(cluster_example_indices)):
+        if len(cluster_example_indices[cluster_num]) == 0:
             print("Warning, empty cluster")
             continue
-        new_dataset = {}
-        for key in unified_dataset.keys():
-            new_dataset[key] = []
-        for i in xrange(0,clustered_hr[cluster_num]):
-            for key in unified_dataset.keys():
-                new_dataset[key].append(unified_dataset[key][clustered_hr[cluster_num][i]])
+        new_dataset = []
+#        for key in unified_dataset.keys():
+#            new_dataset[key] = []
+        for i in xrange(0,len(cluster_example_indices[cluster_num])):
+#            for key in unified_dataset.keys():
+#                new_dataset[key].append(unified_dataset[key][clustered_hr[cluster_num][i]])
+	     new_dataset.append(unified_dataset[cluster_example_indices[cluster_num][i]])
 
         cluster_datasets.append(new_dataset)
 
@@ -192,13 +198,14 @@ def generate_hr(sess, model, dataset, rev_vocab):
     unified_dataset = zip(questions_padded, questions_masked, context_padded, context_masked, dataset["val_question_uuids"])
     batches, num_batches = get_batches(unified_dataset, 32, False)
 
+#    print(len(batches))
+#    print(len(batches[0]))
     clustered_hr = []
     hr_v = None
     first = 1
-    for batch in tqdm(batches[0:3]):
+    for batch in tqdm(batches):
         val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, uuids = zip(*batch)
         hr_values = model.get_hr_for_cluster_answer(sess, val_questions, val_question_masks, val_paragraphs, val_paragraph_masks)
-    	print("Generated all hr_values")
     	assert hr_values.shape[1] == 300
     	assert hr_values.shape[2] == 300
         if first == 1:
@@ -208,7 +215,7 @@ def generate_hr(sess, model, dataset, rev_vocab):
             hr_v = np.concatenate((hr_v,hr_values),axis=0)
         assert hr_v.shape[1] == 300
         assert hr_v.shape[2] == 300
-    return hr_v
+    return hr_v, unified_dataset
 
 
 def main(_):
@@ -244,24 +251,26 @@ def main(_):
 
     cluster_datasets = None
     hr_v = None
+    unified_dataset = None
     with tf.Session() as sess:
         #train_dir = get_normalized_train_dir(FLAGS.train_dir)
 
         train_dir = FLAGS.train_dir
         print ("train_dir: ", train_dir)
         initialize_model(sess, qa, train_dir)
-
         print("Calculating HR, autoencoding, and clustering")
-        hr_v = generate_hr(sess, qa, dataset, rev_vocab)
-	np.savez('data/hr_v_dev',data=hr_v)
+        hr_v, unified_dataset = generate_hr(sess, qa, dataset, rev_vocab)
+    print(len(hr_v))
+#    sys.exit(0)
+    cluster_datasets = autoencode_and_cluster(hr_v,unified_dataset)
 
-    cluster_datasets = autoencode_and_cluster(hr_v)
-
+    answers = {}
     for cluster in xrange(0, len(cluster_datasets)):
+	tf.reset_default_graph()
         qa = QASystem(encoder, decoder, FLAGS)
         with tf.Session() as sess:
 
-            train_dir = FLAGS.cluster_path + "/cluster" + str(cluster) + "/train/early_stopping/"
+            train_dir = FLAGS.cluster_path + "/cluster" + str(cluster+1) + "/train/early_stopping/"
             initialize_model(sess, qa, train_dir)
 
             print ("Generating Answers")

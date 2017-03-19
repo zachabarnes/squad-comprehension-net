@@ -58,6 +58,7 @@ def evaluate(dataset, predictions):
             for qa in paragraph['qas']:
                 total += 1
                 if qa['id'] not in predictions:
+		    total -= 1
                     message = 'Unanswered question ' + qa['id'] + \
                               ' will receive score 0.'
                     print(message, file=sys.stderr)

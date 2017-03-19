@@ -69,7 +69,7 @@ class autoencoder:
         self.n_hidden_2 = 100
         self.n_hidden_1 = 200 # 1st layer num features
 
-	self.autoencoder_num = autoencoder_num
+	   self.autoencoder_num = autoencoder_num
         self.n_input_1 = 300 # data dimension 1 
         if autoencoder_num == 2:
             self.n_input_1 = 20
@@ -79,16 +79,11 @@ class autoencoder:
         # Data Class
         self.my_data = data_wrapper(input_mats, self.batch_size)
 
-        self.setup()
-#        saver_vec = [self.weights['encoder_h1'],self.weights['encoder_h2'],self.weights['encoder_h3'],self.weights['decoder_h1'],self.weights['decoder_h2'],self.weights['decoder_h3']]
-#        saver_vec.extend([self.biases['encoder_h1'],self.biases['encoder_h2'],self.biases['encoder_h3'],self.biases['decoder_h1'],self.biases['decoder_h2'],self.biases['decoder_h3']])
-        self.saver = None
-        variable_names1 = []
-        if autoencoder_num == 1:
-            list1 = [v for v in tf.all_variables() if v.name == "Variable_23:0"][0]
-            self.saver = tf.train.Saver()
-        else:
-            self.saver = tf.train.Saver()
+    	self.setup()
+    	self.saver = None
+    	saver_vec = [self.weights['encoder_h1'],self.weights['encoder_h2'],self.weights['encoder_h3'],self.weights['decoder_h1'],self.weights['decoder_h2'],self.weights['decoder_h3']]
+    	saver_vec.extend([self.biases['encoder_b1'],self.biases['encoder_b2'],self.biases['encoder_b3'],self.biases['decoder_b1'],self.biases['decoder_b2'],self.biases['decoder_b3']])
+    	self.saver = tf.train.Saver(saver_vec)
 
     def setup(self):
         # tf Graph input (only pictures)
@@ -196,29 +191,28 @@ class autoencoder:
         # Launch the graph
 	print("YOU ARE NOW IN AUTOENCODER_ANSWER")
         with tf.Session() as sess:
-            if self.autoencoder_num == 1:
-		print("Attempting to load from data/autoencoder_weights/autoencoder.ckpt")
-    	        self.saver.restore(sess, "data/autoencoder_weights/autoencoder.ckpt")
-            else:
-                self.saver.restore(sess, "data/autoencoder_weights_2nd/autoencoder.ckpt")
+        	if self.autoencoder_num == 1:
+    	            self.saver.restore(sess, "data/autoencoder_weights/autoencoder.ckpt")
+         	else:
+                    self.saver.restore(sess, "data/autoencoder_weights_2nd/autoencoder.ckpt")
 
-	    print('loaded')
-            total_batch = self.my_data.total_batch
-            # Training cycle
-            count = 0
-            for i in xrange(0,total_batch):
-                batch_xs, batch_ys = self.my_data.get_next_batch()
-                # Run optimization op (backprop) and cost op (to get loss value)
-                output_feed = [self.encoder_op]
-                input_feed = {self.X: batch_xs, self.dropout_placeholder: self.dropout}
-                decoded = sess.run(output_feed, input_feed)
-                result.extend(decoded)
-            if self.autoencoder_num == 1:
-                result = np.reshape(result, (total_batch,300*20))
-                result = np.reshape(result, (total_batch,300,20))
-            else:
-                result = np.reshape(result, (total_batch,50*20))
-                result = np.reshape(result, (total_batch,50,20))
+	    	print('loaded')
+            	total_batch = self.my_data.total_batch
+            	# Training cycle
+            	count = 0
+            	for i in xrange(0,total_batch):
+                    batch_xs, batch_ys = self.my_data.get_next_batch()
+                    # Run optimization op (backprop) and cost op (to get loss value)
+                    output_feed = [self.encoder_op]
+                    input_feed = {self.X: batch_xs, self.dropout_placeholder: self.dropout}
+                    decoded = sess.run(output_feed, input_feed)
+                    result.extend(decoded)
+           	if self.autoencoder_num == 1:
+                    result = np.reshape(result, (total_batch,300*20))
+                    result = np.reshape(result, (total_batch,300,20))
+                else:
+                    result = np.reshape(result, (total_batch,50*20))
+                    result = np.reshape(result, (total_batch,50,20))
         return result
 
 
