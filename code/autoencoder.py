@@ -23,7 +23,6 @@ class data_wrapper:
         self.batch_size = batch_size
         self.cur_batch = 0
         self.total_batch = len(input_mats)
-	    self.num_files = num_files
 
     def read_file(self):
         print("reading file: ", self.file_name)
@@ -51,14 +50,6 @@ class data_wrapper:
         val = self.inputs[-200:]
     	return val,val
 
-    def get_new_data(self):
-        self.cur_file += 1
-        if self.cur_file == self.num_files:
-            self.cur_file = 0
-        self.file_name = self.file_head + str(self.cur_file) + '.npz'
-        self.inputs = self.read_file()
-        self.total_batch = 5000
-        self.cur_batch = 0
 
 class autoencoder:
     def __init__(self, input_mats, autoencoder_num):
@@ -72,10 +63,13 @@ class autoencoder:
         self.dropout = .5
 
         # Network Parameters
-        self.n_hidden_3 = 50 # 2nd layer num features
+        self.n_hidden_3 = 20 # 2nd layer num features
+	if autoencoder_num == 2:
+	    self.n_hidden_3 = 50
         self.n_hidden_2 = 100
         self.n_hidden_1 = 200 # 1st layer num features
 
+	self.autoencoder_num = autoencoder_num
         self.n_input_1 = 300 # data dimension 1 
         if autoencoder_num == 2:
             self.n_input_1 = 20
@@ -83,7 +77,7 @@ class autoencoder:
         self.n_input_2 = 300 # data dimension 2
 
         # Data Class
-        self.my_data = data_wrapper(file_name, input_mats, self.batch_size)
+        self.my_data = data_wrapper(input_mats, self.batch_size)
 
         self.setup()
         self.saver = tf.train.Saver()
@@ -96,7 +90,7 @@ class autoencoder:
         self.weights = {
             'encoder_h1': tf.Variable(tf.random_normal([self.n_input_2, self.n_hidden_1])),
             'encoder_h2': tf.Variable(tf.random_normal([self.n_hidden_1, self.n_hidden_2])),
-	        'encoder_h3': tf.Variable(tf.random_normal([self.n_hidden_2, self.n_hidden_3])),
+            'encoder_h3': tf.Variable(tf.random_normal([self.n_hidden_2, self.n_hidden_3])),
 
             'decoder_h1': tf.Variable(tf.random_normal([self.n_hidden_3, self.n_hidden_2])),
             'decoder_h2': tf.Variable(tf.random_normal([self.n_hidden_2, self.n_hidden_1])),
@@ -192,12 +186,14 @@ class autoencoder:
         result = []
         init = tf.global_variables_initializer()
         # Launch the graph
+	print("YOU ARE NOW IN AUTOENCODER_ANSWER")
         with tf.Session() as sess:
-            if autoencoder_num == 1:
+            if self.autoencoder_num == 1:
     	        self.saver.restore(sess, "data/autoencoder_weights/autoencoder.ckpt")
             else:
                 self.saver.restore(sess, "data/autoencoder_weights_2nd/autoencoder.ckpt")
 
+	    print('loaded')
             total_batch = self.my_data.total_batch
             # Training cycle
             count = 0
@@ -208,7 +204,7 @@ class autoencoder:
                 input_feed = {self.X: batch_xs, self.dropout_placeholder: self.dropout}
                 decoded = sess.run(output_feed, input_feed)
                 result.extend(decoded)
-            if autoencoder_num == 1:
+            if self.autoencoder_num == 1:
                 result = np.reshape(result, (total_batch,300*20))
                 result = np.reshape(result, (total_batch,300,20))
             else:
@@ -222,9 +218,10 @@ class autoencoder:
         # Initializing the variables
         init = tf.global_variables_initializer()
         # Launch the graph
+
         with tf.Session() as sess:
-#            self.saver.restore(sess, "data/autoencoder_weights/autoencoder.ckpt")
-            sess.run(init)
+            self.saver.restore(sess, "data/autoencoder_weights/autoencoder.ckpt")
+#            sess.run(init)
             total_batch = self.my_data.total_batch
             # Training cycle
             count = 0
@@ -256,11 +253,12 @@ class autoencoder:
             print("Optimization Finished!")
             save_path = self.saver.save(sess, "data/autoencoder_weights_2nd/autoencoder.ckpt")
 
-a = autoencoder('/mnt/encoded_mat_files/encoded',16)
+#a = autoencoder('/mnt/encoded_mat_files/encoded',16)
+#a = autoencoder((np.zeros((300,300))),1)
 #a.train()
-for i in xrange(0,16):
-	a.answer()
-	a.my_data.get_new_data()
+#for i in xrange(0,16):
+#	a.answer()
+#	a.my_data.get_new_data()
 
 
 

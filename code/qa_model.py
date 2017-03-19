@@ -369,15 +369,17 @@ class QASystem(object):
             self.paragraph_embedding = tf.nn.embedding_lookup(embeddings,self.paragraph_placeholder)
             self.question_embedding = tf.nn.embedding_lookup(embeddings,self.question_placeholder)
 
-    def get_hr_for_cluster_answer(self,session,batch_dict):
+    def get_hr_for_cluster_answer(self,session,qs,q_masks,ps,p_masks):
         #print(i,total_batches)
         input_feed = {}
 
-        qs = batch_dict['qs'][i]
-        q_masks = batch_dict['q_masks'][i]
-        ps = batch_dict['ps'][i]
-        p_masks = batch_dict['p_masks'][i]
+#        qs = batch_dict['qs'][i]
+#        q_masks = batch_dict['q_masks'][i]
+#        ps = batch_dict['ps'][i]
+#        p_masks = batch_dict['p_masks'][i]
         #print(len(p_masks))
+
+	print("HERHEHEHERHEHREHEHRHE")
 
         input_feed[self.question_placeholder] = np.array(list(qs))
         input_feed[self.paragraph_placeholder] = np.array(list(ps))
@@ -388,6 +390,8 @@ class QASystem(object):
         input_feed[self.dropout_placeholder] = 1
 
         output_feed = [self.Hr]    # Get the softmaxed outputs
+
+	print("HERHEHEREHERHER")
 
         return session.run(output_feed, input_feed)[0]
 
@@ -403,8 +407,8 @@ class QASystem(object):
         data_size = 5000
         batch_size = 32
         total_batches = int(math.ceil(float(data_size)/32))
-	    if batch_num == 16:
-	        total_batches = 40
+	if batch_num == 16:
+	    total_batches = 40
         batch_dict = {'qs':[], 'ps':[], 'p_masks':[], 'q_masks':[], 'span':[], 'true_answer':[]}
         for batch in xrange(0,total_batches):
             start_ind = batch_num*data_size + batch*batch_size

@@ -1,8 +1,6 @@
 import numpy as np
 from sklearn.metrics import mean_squared_error
 
-def calc_dist(val,cluster):
-
 
 def cluster(Hr_vals):
 	clusters = np.load('data/kmeans_labels.npz')['data']

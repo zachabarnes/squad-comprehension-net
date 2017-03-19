@@ -154,5 +154,4 @@ def get_batches(dataset, batch_size, random_shuffle=True):
         start_ind = i*batch_size
         end_ind = min(len(dataset),i*batch_size+batch_size)
         batches.append(dataset[start_ind:end_ind])
-
     return batches, num_batches
