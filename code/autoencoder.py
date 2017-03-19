@@ -80,9 +80,15 @@ class autoencoder:
         self.my_data = data_wrapper(input_mats, self.batch_size)
 
         self.setup()
-        saver_vec = [self.weights['encoder_h1'],self.weights['encoder_h2'],self.weights['encoder_h3'],self.weights['decoder_h1'],self.weights['decoder_h2'],self.weights['decoder_h3']]
-        saver_vec.extend([self.biases['encoder_h1'],self.biases['encoder_h2'],self.biases['encoder_h3'],self.biases['decoder_h1'],self.biases['decoder_h2'],self.biases['decoder_h3']])
-        self.saver = tf.train.Saver()
+#        saver_vec = [self.weights['encoder_h1'],self.weights['encoder_h2'],self.weights['encoder_h3'],self.weights['decoder_h1'],self.weights['decoder_h2'],self.weights['decoder_h3']]
+#        saver_vec.extend([self.biases['encoder_h1'],self.biases['encoder_h2'],self.biases['encoder_h3'],self.biases['decoder_h1'],self.biases['decoder_h2'],self.biases['decoder_h3']])
+        self.saver = None
+        variable_names1 = []
+        if autoencoder_num == 1:
+            list1 = [v for v in tf.all_variables() if v.name == "Variable_23:0"][0]
+            self.saver = tf.train.Saver()
+        else:
+            self.saver = tf.train.Saver()
 
     def setup(self):
         # tf Graph input (only pictures)
