@@ -80,6 +80,8 @@ class autoencoder:
         self.my_data = data_wrapper(input_mats, self.batch_size)
 
         self.setup()
+        saver_vec = [self.weights['encoder_h1'],self.weights['encoder_h2'],self.weights['encoder_h3'],self.weights['decoder_h1'],self.weights['decoder_h2'],self.weights['decoder_h3']]
+        saver_vec.extend([self.biases['encoder_h1'],self.biases['encoder_h2'],self.biases['encoder_h3'],self.biases['decoder_h1'],self.biases['decoder_h2'],self.biases['decoder_h3']])
         self.saver = tf.train.Saver()
 
     def setup(self):
