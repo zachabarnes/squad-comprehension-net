@@ -1,4 +1,4 @@
-sfrom __future__ import absolute_import
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
@@ -45,6 +45,9 @@ tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
 tf.app.flags.DEFINE_float("max_gradient_norm", 10.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_integer("n_clusters", 3, "The number of clusters we are using")
 tf.app.flags.DEFINE_string("cluster_path", "cluster", "Trained cluster model paramaters.")
+tf.app.flags.DEFINE_bool("tb", False, "Log Tensorboard Graph")
+tf.app.flags.DEFINE_bool("search", False, "Whether to use advanced search methods")
+tf.app.flags.DEFINE_bool("bi_ans", False, "Whether to use advanced bidirectional ans-ptr method")
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -159,19 +162,23 @@ def generate_hr(sess, model, dataset, rev_vocab):
     clustered_hr = []
     for batch in tqdm(batches):
         val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, uuids = zip(*batch)
-        hr_values = model.get_hr_for_cluster_answer(session, batch)
-        assert hr_values.get_shape().as_list() == [None, 300,300]
+        hr_values = model.get_hr_for_cluster_answer(sess, val_questions, val_question_masks, val_paragraphs, val_paragraph_masks)
+	print("Generated all hr_values")
+	assert hr_values.shape[1] == 300
+	assert hr_values.shape[2] == 300
         a = autoencoder(hr_values, 1)
         autoencoded = a.answer()
-        assert autoencoded.get_shape().as_list() == [None, 300, 20]
+	assert autoencoded.shape[1] == 300
+	assert autoencoded.shape[2] == 20
         b = autoencoder(autoencoded, 2)
         autoencoded_b = b.answer()
-        assert autoencoded_b.get_shape().as_list() == [None, 50, 20]
+	assert autoencoded.shape[1] == 50
+	assert autoencoded.shape[2] == 20
         clustered_hr.extend(cluster(autoencoded_b)) #This should be a vector of cluster assignments
 
     assert len(clustered_hr) == len(unified_dataset)
 
-    cluster_example_indices = [[] for max(clustered_hr)+1]
+    cluster_example_indices = [[] for i in xrange(0, max(clustered_hr)+1)]
     for i in xrange(clustered_hr):
         cluster_example_indices[clustered_hr[i]].append(i)
 
@@ -183,7 +190,7 @@ def generate_hr(sess, model, dataset, rev_vocab):
         new_dataset = {}
         for key in unified_dataset.keys():
             new_dataset[key] = []
-        for i in xrange(clustered_hr[cluster_num])
+        for i in xrange(0,clustered_hr[cluster_num]):
             for key in unified_dataset.keys():
                 new_dataset[key].append(unified_dataset[key][clustered_hr[cluster_num][i]])
 
