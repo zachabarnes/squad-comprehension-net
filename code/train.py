@@ -24,7 +24,7 @@ tf.app.flags.DEFINE_integer("state_size", 150, "Size of each model layer. Defaul
 tf.app.flags.DEFINE_integer("embedding_size", 300, "Size of the pretrained embeddings. 300 is the max size available for GloVe")    # Previously, 100
 tf.app.flags.DEFINE_integer("max_paragraph_size", 400, "The length to cut paragraphs off at")   # As per Frank's beautiful histogram
 tf.app.flags.DEFINE_integer("max_question_size", 30, "The length to cut question off at")   # As per Frank's beautiful histogram
-tf.app.flags.DEFINE_integer("max_answer_size", 20, "Maximum window of answers to search.")
+tf.app.flags.DEFINE_integer("max_answer_size", 15, "Maximum window of answers to search.")
 tf.app.flags.DEFINE_integer("eval_size", 400, "The number of examples to evaluate F1 and EM on.")
 tf.app.flags.DEFINE_string("data_dir", "data/squad", "SQuAD directory (default ./data/squad)")
 tf.app.flags.DEFINE_string("train_dir", "train", "Training directory to save the model parameters (default: ./train).")
