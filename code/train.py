@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import os
 import json
+import numpy as np
 
 import tensorflow as tf
 
@@ -28,7 +29,7 @@ tf.app.flags.DEFINE_integer("max_answer_size", 20, "Maximum window of answers to
 tf.app.flags.DEFINE_integer("eval_size", 400, "The number of examples to evaluate F1 and EM on.")
 tf.app.flags.DEFINE_string("data_dir", "data/squad", "SQuAD directory (default ./data/squad)")
 tf.app.flags.DEFINE_string("train_dir", "train", "Training directory to save the model parameters (default: ./train).")
-tf.app.flags.DEFINE_string("load_train_dir", "", "Training directory to load model parameters from to resume training (default: {train_dir}).")
+tf.app.flags.DEFINE_string("load_train_dir", "train/match-lstm/17-03-2017_07:00:39/early_stopping", "Training directory to load model parameters from to resume training (default: {train_dir}).")
 tf.app.flags.DEFINE_string("log_dir", "log", "Path to store log and flag files (default: ./log)")
 tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
 tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab file (default: ./data/squad/vocab.dat)")
@@ -43,9 +44,21 @@ FLAGS = tf.app.flags.FLAGS
 
 
 def main(_):
+    cluster_labels = np.load('data/kmeans_labels.npz')['data']
+    indices = []
+    cluster = 2
+    for i in xrange(0,len(cluster_labels)):
+	if cluster_labels[i] == cluster:
+	    indices.append(int(i))
 
     # Do what you need to load datasets from FLAGS.data_dir
     dataset = get_dataset(FLAGS.data_dir, FLAGS.max_question_size, FLAGS.max_paragraph_size)
+
+
+    for key in dataset.keys():
+	if key.split('_')[0].strip() == 'train':
+		dataset[key] = [dataset[key][ind] for ind in indices]
+
     
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
     FLAGS.embed_path = embed_path
