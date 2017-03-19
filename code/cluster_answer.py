@@ -130,6 +130,39 @@ def generate_answers(sess, model, unified_dataset, rev_vocab):
 
     return answers
 
+def autoencode_and_cluster(hr_v):
+    a = autoencoder(hr_values, 1)
+    autoencoded = a.answer()
+    assert autoencoded.shape[1] == 300
+    assert autoencoded.shape[2] == 20
+    b = autoencoder(autoencoded, 2)
+    autoencoded_b = b.answer()
+    assert autoencoded.shape[1] == 50
+    assert autoencoded.shape[2] == 20
+    clustered_hr.extend(cluster(autoencoded_b)) #This should be a vector of cluster assignments
+
+    assert len(clustered_hr) == len(unified_dataset)
+
+    cluster_example_indices = [[] for i in xrange(0, max(clustered_hr)+1)]
+    for i in xrange(clustered_hr):
+        cluster_example_indices[clustered_hr[i]].append(i)
+
+    cluster_datasets = []
+    for cluster_num in xrange(clustered_hr):
+        if len(clustered_hr[cluster_num]) == 0:
+            print("Warning, empty cluster")
+            continue
+        new_dataset = {}
+        for key in unified_dataset.keys():
+            new_dataset[key] = []
+        for i in xrange(0,clustered_hr[cluster_num]):
+            for key in unified_dataset.keys():
+                new_dataset[key].append(unified_dataset[key][clustered_hr[cluster_num][i]])
+
+        cluster_datasets.append(new_dataset)
+
+    return cluster_datasets
+
 def generate_hr(sess, model, dataset, rev_vocab):
     """
     Loop over the dev or test dataset and generate answer.
@@ -160,43 +193,20 @@ def generate_hr(sess, model, dataset, rev_vocab):
     batches, num_batches = get_batches(unified_dataset, 32, False)
 
     clustered_hr = []
+    hr_v = None
     for batch in tqdm(batches):
         val_questions, val_question_masks, val_paragraphs, val_paragraph_masks, uuids = zip(*batch)
         hr_values = model.get_hr_for_cluster_answer(sess, val_questions, val_question_masks, val_paragraphs, val_paragraph_masks)
-	print("Generated all hr_values")
-	assert hr_values.shape[1] == 300
-	assert hr_values.shape[2] == 300
-        a = autoencoder(hr_values, 1)
-        autoencoded = a.answer()
-	assert autoencoded.shape[1] == 300
-	assert autoencoded.shape[2] == 20
-        b = autoencoder(autoencoded, 2)
-        autoencoded_b = b.answer()
-	assert autoencoded.shape[1] == 50
-	assert autoencoded.shape[2] == 20
-        clustered_hr.extend(cluster(autoencoded_b)) #This should be a vector of cluster assignments
-
-    assert len(clustered_hr) == len(unified_dataset)
-
-    cluster_example_indices = [[] for i in xrange(0, max(clustered_hr)+1)]
-    for i in xrange(clustered_hr):
-        cluster_example_indices[clustered_hr[i]].append(i)
-
-    cluster_datasets = []
-    for cluster_num in xrange(clustered_hr):
-        if len(clustered_hr[cluster_num]) == 0:
-            print("Warning, empty cluster")
-            continue
-        new_dataset = {}
-        for key in unified_dataset.keys():
-            new_dataset[key] = []
-        for i in xrange(0,clustered_hr[cluster_num]):
-            for key in unified_dataset.keys():
-                new_dataset[key].append(unified_dataset[key][clustered_hr[cluster_num][i]])
-
-        cluster_datasets.append(new_dataset)
-
-    return cluster_datasets
+    	print("Generated all hr_values")
+    	assert hr_values.shape[1] == 300
+    	assert hr_values.shape[2] == 300
+        if hr_v == None:
+            hr_v = hr_values
+        else:
+            hr_v = np.concatenate(hr_v,hr_values)
+        assert hr_v.shape[1] == 300
+        assert hr_v.shape[2] == 300
+    return hr_v
 
 
 def main(_):
@@ -231,6 +241,7 @@ def main(_):
     qa = QASystem(encoder, decoder, FLAGS)
 
     cluster_datasets = None
+    hr_v = None
     with tf.Session() as sess:
         #train_dir = get_normalized_train_dir(FLAGS.train_dir)
 
@@ -239,7 +250,9 @@ def main(_):
         initialize_model(sess, qa, train_dir)
 
         print("Calculating HR, autoencoding, and clustering")
-        cluster_datasets = generate_hr(sess, qa, dataset, rev_vocab)
+        hr_v = generate_hr(sess, qa, dataset, rev_vocab)
+
+    cluster_datasets = autoencode_and_cluster(hr_v, dataset)
 
     for cluster in xrange(0, len(cluster_datasets)):
         qa = QASystem(encoder, decoder, FLAGS)
