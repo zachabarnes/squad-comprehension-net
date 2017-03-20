@@ -151,6 +151,7 @@ class Encoder(object):
         self.b = tf.Variable(tf.zeros([1,1]))
 
         params = [self.WQ, self.WP, self.WR, self.bP, self.w, self.b]
+        return params
 
     def encode(self, input_question, input_paragraph, question_length, paragraph_length, dropout_rate, encoder_state_input = None):    # LSTM Preprocessing and Match-LSTM Layers
         """
