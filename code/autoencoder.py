@@ -69,7 +69,7 @@ class autoencoder:
         self.n_hidden_2 = 100
         self.n_hidden_1 = 200 # 1st layer num features
 
-	self.autoencoder_num = autoencoder_num
+	   self.autoencoder_num = autoencoder_num
         self.n_input_1 = 300 # data dimension 1 
         if autoencoder_num == 2:
             self.n_input_1 = 20
@@ -79,11 +79,11 @@ class autoencoder:
         # Data Class
         self.my_data = data_wrapper(input_mats, self.batch_size)
 
-	self.setup()
-	self.saver = None
-	saver_vec = [self.weights['encoder_h1'],self.weights['encoder_h2'],self.weights['encoder_h3'],self.weights['decoder_h1'],self.weights['decoder_h2'],self.weights['decoder_h3']]
-	saver_vec.extend([self.biases['encoder_b1'],self.biases['encoder_b2'],self.biases['encoder_b3'],self.biases['decoder_b1'],self.biases['decoder_b2'],self.biases['decoder_b3']])
-	self.saver = tf.train.Saver(saver_vec)
+    	self.setup()
+    	self.saver = None
+    	saver_vec = [self.weights['encoder_h1'],self.weights['encoder_h2'],self.weights['encoder_h3'],self.weights['decoder_h1'],self.weights['decoder_h2'],self.weights['decoder_h3']]
+    	saver_vec.extend([self.biases['encoder_b1'],self.biases['encoder_b2'],self.biases['encoder_b3'],self.biases['decoder_b1'],self.biases['decoder_b2'],self.biases['decoder_b3']])
+    	self.saver = tf.train.Saver(saver_vec)
 
     def setup(self):
         # tf Graph input (only pictures)
