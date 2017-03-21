@@ -60,7 +60,7 @@ def initialize_vocabulary(vocabulary_path):
         raise ValueError("Vocabulary file %s not found.", vocabulary_path)
 
 
-def process_glove(args, vocab_list, save_path, size=1000000, random_init=False):
+def process_glove(args, vocab_list, save_path, size=2190000, random_init=False):
     """
     :param vocab_list: [vocab]
     :return:
