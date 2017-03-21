@@ -60,7 +60,7 @@ def initialize_vocabulary(vocabulary_path):
         raise ValueError("Vocabulary file %s not found.", vocabulary_path)
 
 
-def process_glove(args, vocab_list, save_path, size=2190000, random_init=False):
+def process_glove(args, vocab_list, save_path, size=1000000, random_init=False):
     """
     :param vocab_list: [vocab]
     :return:
@@ -101,10 +101,14 @@ def create_vocabulary_from_glove(vocabulary_path):
         print("Creating vocabulary %s from glove data %s" % (vocabulary_path, str(data_paths)))
         vocab = []
         with open(data_paths, mode="rb") as f:
-            for line in tqdm(f, total = 2190000):
+            counter = 0
+            for line in tqdm(f, total = 1000000):
+                if counter > 1000000:
+                    break
                 array = line.lstrip().rstrip().split(" ")
                 word = array[0]
                 vocab.append(word)
+                counter += 1
         vocab_list = _START_VOCAB + vocab
         print("Vocabulary size: %d" % len(vocab_list))
         with gfile.GFile(vocabulary_path, mode="wb") as vocab_file:
