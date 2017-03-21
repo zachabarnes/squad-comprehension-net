@@ -27,7 +27,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 tf.app.flags.DEFINE_float("learning_rate", 0.001, "Learning rate.")
-tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
+tf.app.flags.DEFINE_float("dropout", 1, "Fraction of units randomly dropped on non-recurrent connections.")
 tf.app.flags.DEFINE_integer("batch_size", 32, "Batch size to use during answering.")
 tf.app.flags.DEFINE_integer("epochs", 0, "Number of epochs to train.")
 tf.app.flags.DEFINE_integer("state_size", 150, "Size of each model layer.")
@@ -148,9 +148,12 @@ def autoencode_and_cluster(hr_values, unified_dataset):
     print(len(unified_dataset))
 #    assert len(clustered_hr) == len(unified_dataset)
 
+
     cluster_example_indices = [[] for i in xrange(0, max(clustered_hr)+1)]
     for i in xrange(0,len(clustered_hr)):
         cluster_example_indices[clustered_hr[i]].append(i)
+
+    print( len(cluster_example_indices[0]) +len( cluster_example_indices[1]) + len(cluster_example_indices[2]))
 
     cluster_datasets = []
     for cluster_num in xrange(0,len(cluster_example_indices)):
@@ -217,7 +220,14 @@ def generate_hr(sess, model, dataset, rev_vocab):
         assert hr_v.shape[2] == 300
     return hr_v, unified_dataset
 
-
+def first_word(questions, unified_dataset):
+    cluster_dataset = [[],[]]
+    for i in xrange(0,len(questions)):
+	if questions[i].split()[0].strip() == '32':
+	    cluster_dataset[0].append(unified_dataset[i])
+	else:
+	    cluster_dataset[1].append(unified_dataset[i])
+    return cluster_dataset
 def main(_):
 
     vocab, rev_vocab = initialize_vocab(FLAGS.vocab_path)
@@ -263,14 +273,14 @@ def main(_):
     print(len(hr_v))
 #    sys.exit(0)
     cluster_datasets = autoencode_and_cluster(hr_v,unified_dataset)
-
+#    cluster_datasets = first_word(dataset['val_questions'],unified_dataset)
     answers = {}
     for cluster in xrange(0, len(cluster_datasets)):
 	tf.reset_default_graph()
         qa = QASystem(encoder, decoder, FLAGS)
         with tf.Session() as sess:
 
-            train_dir = FLAGS.cluster_path + "/cluster" + str(cluster+1) + "/train/early_stopping/"
+            train_dir = FLAGS.cluster_path + "/cluster" + str((cluster+1)%3 + 1) + "/train/early_stopping/"
             initialize_model(sess, qa, train_dir)
 
             print ("Generating Answers")

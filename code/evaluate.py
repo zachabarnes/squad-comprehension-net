@@ -53,11 +53,14 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
 
 def evaluate(dataset, predictions):
     f1 = exact_match = total = 0
+    count = 0
     for article in dataset:
         for paragraph in article['paragraphs']:
             for qa in paragraph['qas']:
                 total += 1
                 if qa['id'] not in predictions:
+		    count += 1
+		    print(count)
 		    total -= 1
                     message = 'Unanswered question ' + qa['id'] + \
                               ' will receive score 0.'

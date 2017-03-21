@@ -29,7 +29,7 @@ tf.app.flags.DEFINE_integer("max_answer_size", 20, "Maximum window of answers to
 tf.app.flags.DEFINE_integer("eval_size", 400, "The number of examples to evaluate F1 and EM on.")
 tf.app.flags.DEFINE_string("data_dir", "data/squad", "SQuAD directory (default ./data/squad)")
 tf.app.flags.DEFINE_string("train_dir", "train", "Training directory to save the model parameters (default: ./train).")
-tf.app.flags.DEFINE_string("load_train_dir", "train/match-lstm/17-03-2017_07:00:39/early_stopping", "Training directory to load model parameters from to resume training (default: {train_dir}).")
+tf.app.flags.DEFINE_string("load_train_dir", "", "Training directory to load model parameters from to resume training (default: {train_dir}).")
 tf.app.flags.DEFINE_string("log_dir", "log", "Path to store log and flag files (default: ./log)")
 tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
 tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab file (default: ./data/squad/vocab.dat)")
@@ -44,9 +44,9 @@ FLAGS = tf.app.flags.FLAGS
 
 
 def main(_):
-    cluster_labels = np.load('data/kmeans_labels.npz')['data']
+    cluster_labels = np.load('data/whatvsall.npz')['data']
     indices = []
-    cluster = 2
+    cluster = 1
     for i in xrange(0,len(cluster_labels)):
 	if cluster_labels[i] == cluster:
 	    indices.append(int(i))
