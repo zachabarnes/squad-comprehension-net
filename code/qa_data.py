@@ -68,12 +68,11 @@ def process_glove(args, vocab_list, save_path, size=2190000, random_init=False):
     if not gfile.Exists(save_path + ".npz"):
         glove_path = os.path.join(args.glove_dir, "glove.{}.{}d.txt".format(args.vector_set, args.glove_dim))
         if random_init:
-            glove = np.random.randn(len(vocab_list), args.glove_dim)
+            glove = np.random.randn(len(vocab_list)+1, args.glove_dim)
         else:
-            glove = np.zeros((len(vocab_list), args.glove_dim))
+            glove = np.zeros((len(vocab_list)+1, args.glove_dim))
         found = 0
         with open(glove_path, 'r') as fh:
-            #for line in tqdm(fh, total=size):
             for line in tqdm(fh, total = size):
                 array = line.lstrip().rstrip().split(" ")
                 word = array[0]
