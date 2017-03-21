@@ -33,10 +33,10 @@ def setup_args():
     parser.add_argument("--source_dir", default=source_dir)
     parser.add_argument("--glove_dir", default=glove_dir)
     parser.add_argument("--vocab_dir", default=vocab_dir)
-    parser.add_argument("--glove_dim", default=300, type=int)   # Was 100
+    parser.add_argument("--glove_dim", default=100, type=int)   # Was 100
     parser.add_argument("--random_init", default=False, type=bool)
     parser.add_argument("--vocab_from_glove", default=True, type=bool)
-    parser.add_argument("--vector_set", default="840B")
+    parser.add_argument("--vector_set", default="6B")
     return parser.parse_args()
 
 
@@ -102,7 +102,7 @@ def create_vocabulary_from_glove(vocabulary_path):
         vocab = []
         with open(data_paths, mode="rb") as f:
             counter = 0
-            for line in tqdm(f, total = 1000000):
+            for line in tqdm(f, total = 400000):
                 if counter > 1000000:
                     break
                 array = line.lstrip().rstrip().split(" ")
