@@ -35,6 +35,7 @@ def setup_args():
     parser.add_argument("--vocab_dir", default=vocab_dir)
     parser.add_argument("--glove_dim", default=300, type=int)   # Was 100
     parser.add_argument("--random_init", default=False, type=bool)
+        parser.add_argument("--vocab_from_glove", default=True, type=bool)
     parser.add_argument("--vector_set", default="840B")
     return parser.parse_args()
 
@@ -59,7 +60,7 @@ def initialize_vocabulary(vocabulary_path):
         raise ValueError("Vocabulary file %s not found.", vocabulary_path)
 
 
-def process_glove(args, vocab_list, save_path, size=1900000, random_init=False):
+def process_glove(args, vocab_list, save_path, size=2196019, random_init=False):
     """
     :param vocab_list: [vocab]
     :return:
@@ -73,7 +74,7 @@ def process_glove(args, vocab_list, save_path, size=1900000, random_init=False):
         found = 0
         with open(glove_path, 'r') as fh:
             #for line in tqdm(fh, total=size):
-            for line in tqdm(fh):
+            for line in tqdm(fh, total = size):
                 array = line.lstrip().rstrip().split(" ")
                 word = array[0]
                 vector = list(map(float, array[1:]))
@@ -89,12 +90,30 @@ def process_glove(args, vocab_list, save_path, size=1900000, random_init=False):
                     idx = vocab_list.index(word.upper())
                     glove[idx, :] = vector
                     found += 1
-        # Tyler: Sometimes we get a larger # of found word vectors than there are words in the vocab_list.
-        # This could be due to there being word vectors for capital and lower case words.
 
         print("{}/{} of word vocab have corresponding vectors in {}".format(found, len(vocab_list), glove_path))
         np.savez_compressed(save_path, glove=glove)
         print("saved trimmed glove matrix at: {}".format(save_path))
+
+
+def create_vocabulary_from_glove(vocabulary_path):
+    if not gfile.Exists(vocabulary_path):
+        data_paths = os.path.join(args.glove_dir, "glove.{}.{}d.txt".format(args.vector_set, args.glove_dim))
+        print("Creating vocabulary %s from glove data %s" % (vocabulary_path, str(data_paths)))
+        vocab = {}
+        with open(data_paths, mode="rb") as f:
+            for line in tqdm(f, total = 2196019):
+                array = line.lstrip().rstrip().split(" ")
+                word = array[0]
+                if word in vocab:
+                    vocab[word] += 1
+                else:
+                    vocab[word] = 1
+        vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
+        print("Vocabulary size: %d" % len(vocab_list))
+        with gfile.GFile(vocabulary_path, mode="wb") as vocab_file:
+            for w in vocab_list:
+                vocab_file.write(w + b"\n")
 
 
 def create_vocabulary(vocabulary_path, data_paths, tokenizer=None):
@@ -153,13 +172,17 @@ if __name__ == '__main__':
     valid_path = pjoin(args.source_dir, "val")
     dev_path = pjoin(args.source_dir, "dev")
 
-    create_vocabulary(vocab_path,
-                      [pjoin(args.source_dir, "train.context"),
-                       pjoin(args.source_dir, "train.question"),
-                       pjoin(args.source_dir, "val.context"),
-                       pjoin(args.source_dir, "val.question"),
-                       pjoin(args.source_dir, "dev.context"),
-                       pjoin(args.source_dir, "dev.question")])
+    if args.vocab_from_glove:
+        create_vocabulary_from_glove(vocab_path)
+    else:
+        create_vocabulary(vocab_path,
+                          [pjoin(args.source_dir, "train.context"),
+                           pjoin(args.source_dir, "train.question"),
+                           pjoin(args.source_dir, "val.context"),
+                           pjoin(args.source_dir, "val.question"),
+                           pjoin(args.source_dir, "dev.context"),
+                           pjoin(args.source_dir, "dev.question")])
+
     vocab, rev_vocab = initialize_vocabulary(pjoin(args.vocab_dir, "vocab.dat"))
 
     # ======== Trim Distributed Word Representation =======
