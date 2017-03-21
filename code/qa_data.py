@@ -35,7 +35,7 @@ def setup_args():
     parser.add_argument("--vocab_dir", default=vocab_dir)
     parser.add_argument("--glove_dim", default=300, type=int)   # Was 100
     parser.add_argument("--random_init", default=False, type=bool)
-        parser.add_argument("--vocab_from_glove", default=True, type=bool)
+    parser.add_argument("--vocab_from_glove", default=True, type=bool)
     parser.add_argument("--vector_set", default="840B")
     return parser.parse_args()
 
@@ -60,7 +60,7 @@ def initialize_vocabulary(vocabulary_path):
         raise ValueError("Vocabulary file %s not found.", vocabulary_path)
 
 
-def process_glove(args, vocab_list, save_path, size=2196019, random_init=False):
+def process_glove(args, vocab_list, save_path, size=1000000, random_init=False):
     """
     :param vocab_list: [vocab]
     :return:
@@ -79,15 +79,15 @@ def process_glove(args, vocab_list, save_path, size=2196019, random_init=False):
                 word = array[0]
                 vector = list(map(float, array[1:]))
                 if word in vocab_list:
-                    idx = vocab_list.index(word)
+                    idx = vocab_list[word]
                     glove[idx, :] = vector
                     found += 1
                 if word.capitalize() in vocab_list:
-                    idx = vocab_list.index(word.capitalize())
+                    idx = vocab_list[word.capitalize()]
                     glove[idx, :] = vector
                     found += 1
                 if word.upper() in vocab_list:
-                    idx = vocab_list.index(word.upper())
+                    idx = vocab_list[word.upper()]
                     glove[idx, :] = vector
                     found += 1
 
@@ -102,7 +102,7 @@ def create_vocabulary_from_glove(vocabulary_path):
         print("Creating vocabulary %s from glove data %s" % (vocabulary_path, str(data_paths)))
         vocab = {}
         with open(data_paths, mode="rb") as f:
-            for line in tqdm(f, total = 2196019):
+            for line in tqdm(f, total = 1000000):
                 array = line.lstrip().rstrip().split(" ")
                 word = array[0]
                 if word in vocab:
@@ -188,7 +188,7 @@ if __name__ == '__main__':
     # ======== Trim Distributed Word Representation =======
     # If you use other word representations, you should change the code below
 
-    process_glove(args, rev_vocab, args.source_dir + "/glove.trimmed.{}".format(args.glove_dim),
+    process_glove(args, vocab, args.source_dir + "/glove.trimmed.{}".format(args.glove_dim),
                   random_init=args.random_init)
 
     # ======== Creating Dataset =========
