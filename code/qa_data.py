@@ -35,7 +35,7 @@ def setup_args():
     parser.add_argument("--vocab_dir", default=vocab_dir)
     parser.add_argument("--glove_dim", default=300, type=int)   # Was 100
     parser.add_argument("--random_init", default=False, type=bool)
-        parser.add_argument("--vocab_from_glove", default=True, type=bool)
+    parser.add_argument("--vocab_from_glove", default=True, type=bool)
     parser.add_argument("--vector_set", default="840B")
     return parser.parse_args()
 
