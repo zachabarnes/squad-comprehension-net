@@ -46,15 +46,15 @@ class MatchLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
         self.FLAGS = FLAGS
 
         l, P, Q = self.hidden_size, self.FLAGS.max_paragraph_size, self.FLAGS.max_question_size
-        # self.WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) 
+        # self.WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
         # self.WP = tf.get_variable("WP", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
         # self.WR = tf.get_variable("WR", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
 
         # self.bP = tf.Variable(tf.zeros([1, l]))
-        # self.w = tf.Variable(tf.zeros([l,1])) 
+        # self.w = tf.Variable(tf.zeros([l,1]))
         # self.b = tf.Variable(tf.zeros([1,1]))
 
-        self.WQ, self.WP, self.WR, self.bP, self.w, self.b = params        
+        self.WQ, self.WP, self.WR, self.bP, self.w, self.b = params
 
         # Calculate term1 by resphapeing to l
         HQ_shaped = tf.reshape(HQ, [-1, l])
@@ -69,7 +69,7 @@ class MatchLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
         inputs: a batch representation (HP at each word i) that is inputs = hp_i and are [None, l]
         state: a current state for our cell which is LSTM so its a tuple of (c_mem, h_state), both are [None, l]
         """
-        
+
         #For naming convention load in from self the params and rename
         term1 = self.term1
         WQ, WP, WR = self.WQ, self.WP, self.WR
@@ -83,7 +83,7 @@ class MatchLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
         assert hr.get_shape().as_list() == [None, l]
         assert hp_i.get_shape().as_list() == [None, l]
 
-        # Way to extent a [None, l] matrix by dim Q 
+        # Way to extent a [None, l] matrix by dim Q
         term2 = tf.matmul(hp_i,WP) + tf.matmul(hr, WR) + bP
         term2 = tf.tile(tf.expand_dims(term2,1),[1,Q,1])
         #term2 = tf.transpose(tf.stack([term2 for _ in range(Q)]), [1,0,2])
@@ -129,12 +129,12 @@ class Encoder(object):
         self.FLAGS = FLAGS
 
     def init_params(self, l, P, Q):
-        self.WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0)) 
+        self.WQ = tf.get_variable("WQ", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
         self.WP = tf.get_variable("WP", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
         self.WR = tf.get_variable("WR", [l,l], initializer=tf.uniform_unit_scaling_initializer(1.0))
 
         self.bP = tf.Variable(tf.zeros([1, l]))
-        self.w = tf.Variable(tf.zeros([l,1])) 
+        self.w = tf.Variable(tf.zeros([l,1]))
         self.b = tf.Variable(tf.zeros([1,1]))
 
         params = [self.WQ, self.WP, self.WR, self.bP, self.w, self.b]
@@ -176,7 +176,7 @@ class Encoder(object):
 
         # Initialize forward and backward matching LSTMcells with same matching params
         with tf.variable_scope("forward"):
-            cell_f = MatchLSTMCell(l, HQ, self.FLAGS, params) 
+            cell_f = MatchLSTMCell(l, HQ, self.FLAGS, params)
 
             if (self.FLAGS.deep):
                 cell_f = [cell_f] + [tf.nn.rnn_cell.BasicLSTMCell(self.size)]*2
@@ -191,10 +191,10 @@ class Encoder(object):
 
         # Calculate encodings for both forward and backward directions
         (HR_right, HR_left), _ = tf.nn.bidirectional_dynamic_rnn(cell_f, cell_b, HP, sequence_length = paragraph_length, dtype = tf.float32)
-        
+
         ### Append the two things calculated above into H^R
         HR = tf.concat(2,[HR_right, HR_left])
-        assert HR.get_shape().as_list() == [None, P, 2*l]   
+        assert HR.get_shape().as_list() == [None, P, 2*l]
 
         dropout_rate2 = (1 - dropout_rate)/2.0 + dropout_rate
         HR = tf.nn.dropout(HR, dropout_rate2)
@@ -205,82 +205,82 @@ class Decoder(object):
     def __init__(self, FLAGS):
         self.FLAGS = FLAGS
 
-    def decode(self, knowledge_rep, paragraph_mask, cell_init): 
+    def decode(self, knowledge_rep, paragraph_mask, cell_init):
         """
-        param knowledge_rep: it is a representation of the paragraph and question                
+        param knowledge_rep: it is a representation of the paragraph and question
         return: tuple that contains the logits for the distributions of start and end token
         """
 
         # Decode Params
         l = self.FLAGS.state_size
         P = self.FLAGS.max_paragraph_size
-        Hr = knowledge_rep 
+        Hr = knowledge_rep
         mask = tf.log(tf.cast(paragraph_mask, tf.float32))
 
         # Decode variables
-        V = tf.get_variable("V", [2*l,l], initializer=tf.contrib.layers.xavier_initializer())   
+        V = tf.get_variable("V", [2*l,l], initializer=tf.contrib.layers.xavier_initializer())
         Wa = tf.get_variable("Wa", [l,l], initializer=tf.contrib.layers.xavier_initializer())
         ba = tf.Variable(tf.zeros([1,l]), name = "ba")
         v = tf.Variable(tf.zeros([l,1]), name = "v")
         c = tf.Variable(tf.zeros([1]), name = "c")
-       
+
         # Basic LSTM for decoding
         cell = tf.nn.rnn_cell.BasicLSTMCell(l)
 
         # Preds[0] for predictions start span, and Preds[1] for end of span
         preds = [None, None]
-        
+
         # Initial hidden layer (and state) from placeholder
         hk = cell_init
         cell_state = (hk, hk)
-        assert hk.get_shape().as_list() == [None, l] 
+        assert hk.get_shape().as_list() == [None, l]
 
         # Just two iterations of decoding for the start point and then the end point
-        for i, _ in enumerate(preds):  
+        for i, _ in enumerate(preds):
             if i > 0: #Round 2 should reuse variables from before
                 tf.get_variable_scope().reuse_variables()
 
             # Mult and extend using hack to get shape compatable
-            term2 = tf.matmul(hk,Wa) + ba 
+            term2 = tf.matmul(hk,Wa) + ba
             term2 = tf.tile(tf.expand_dims(term2,1),[1,P,1])
-            #term2 = tf.transpose(tf.stack([term2 for _ in range(P)]), [1,0,2]) 
-            assert term2.get_shape().as_list() == [None, P, l] 
-            
+            #term2 = tf.transpose(tf.stack([term2 for _ in range(P)]), [1,0,2])
+            assert term2.get_shape().as_list() == [None, P, l]
+
             # Reshape and matmul
             Hr_shaped = tf.reshape(Hr, [-1, 2*l])
             term1 = tf.matmul(Hr_shaped, V)
             term1 = tf.reshape(term1, [-1, P, l])
-            assert term1.get_shape().as_list() == [None, P, l] 
+            assert term1.get_shape().as_list() == [None, P, l]
 
             # Add terms and tanh them
             Fk = tf.tanh(term1 + term2)
-            assert Fk.get_shape().as_list() == [None, P, l] 
+            assert Fk.get_shape().as_list() == [None, P, l]
 
             # Generate beta_term v^T * Fk + c * e(P)
             Fk_shaped = tf.reshape(Fk, [-1, l])
             beta_term = tf.matmul(Fk_shaped, v) + c
             beta_term = tf.reshape(beta_term ,[-1, P, 1])
-            assert beta_term.get_shape().as_list() == [None, P, 1] 
+            assert beta_term.get_shape().as_list() == [None, P, 1]
 
             #TEST OTHER MASK VERSION
             beta_term_masked = tf.squeeze(beta_term,2) + mask
-            assert beta_term_masked.get_shape().as_list() == [None, P] 
+            assert beta_term_masked.get_shape().as_list() == [None, P]
 
             # Get Beta (prob dist over the paragraph)
             beta = tf.nn.softmax(beta_term_masked)
             beta_shaped = tf.expand_dims(beta, 2)
-            assert beta_shaped.get_shape().as_list() == [None, P, 1] 
+            assert beta_shaped.get_shape().as_list() == [None, P, 1]
 
             # Setup input to LSTM
             Hr_shaped_cell = tf.transpose(Hr, [0, 2, 1])
             cell_input = tf.squeeze(tf.batch_matmul(Hr_shaped_cell, beta_shaped), [2])
-            assert cell_input.get_shape().as_list() == [None, 2*l] 
+            assert cell_input.get_shape().as_list() == [None, 2*l]
 
             # Ouput and State for next iteration
             hk, cell_state = cell(cell_input, cell_state)
 
             #Save a 2D rep of Beta as output
-            preds[i] = beta_term_masked 
+            preds[i] = beta_term_masked
 
         return tuple(preds) # Bs, Be [batchsize, paragraph_length]
 
@@ -321,7 +321,7 @@ class QASystem(object):
 
         # ==== set up training/updating procedure ==
         opt_function = get_optimizer(self.FLAGS.optimizer)  #Default is Adam
-        self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 10000, decay_rate = 0.95, staircase=True)
+        self.decayed_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, decay_steps = 2000, decay_rate = 0.95, staircase=True)
         self.learning_rate_tb = tf.summary.scalar("learning_rate", self.decayed_rate)
         optimizer = opt_function(self.decayed_rate)
 
@@ -341,11 +341,11 @@ class QASystem(object):
         # Get encoding representation from encode
         with vs.variable_scope("encode"):
             Hr = self.encoder.encode(self.question_embedding, self.paragraph_embedding, self.question_length, self.paragraph_length, self.dropout_placeholder)
-        
+
         # Get Boundary predictions using decode
         with vs.variable_scope("decode"):
             self.pred_s, self.pred_e = self.decoder.decode(Hr, self.paragraph_mask_placeholder, self.cell_initial_placeholder)
-        
+
         # If using bidirectional ans-ptr model
         if (self.FLAGS.bi_ans):
             #Dims for reversal
@@ -381,10 +381,10 @@ class QASystem(object):
             l1 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_s, self.start_answer_placeholder)
             l2 = tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred_e, self.end_answer_placeholder)
             self.loss = tf.reduce_mean(l1+l2)
-            
+
             self.train_loss_tb = tf.summary.scalar("train_loss", self.loss)
             self.val_loss_tb = tf.summary.scalar("val_loss", self.loss)
-        
+
 
     def setup_embeddings(self):
         """
@@ -412,7 +412,7 @@ class QASystem(object):
         input_feed[self.question_length] = np.sum(list(q_masks), axis = 1)    # Sum and make into a list
         input_feed[self.cell_initial_placeholder] = np.zeros((len(qs), self.FLAGS.state_size))
         input_feed[self.dropout_placeholder] = 1
-        
+
         output_feed = [self.Beta_s, self.Beta_e]    # Get the softmaxed outputs
 
         outputs = session.run(output_feed, input_feed)
@@ -476,7 +476,7 @@ class QASystem(object):
         :param log: whether we print to std out stream
         :return:
         """
-        
+
         our_answers = []
         their_answers = []
         eval_set = random.sample(dataset, sample)
@@ -548,17 +548,17 @@ class QASystem(object):
         output_feed.append(self.global_norm)
         output_feed.append(self.global_step)
 
-       
+
         if self.FLAGS.tb is True:
             output_feed.append(self.val_loss_tb)
             loss, norm, step, val_tb = session.run(output_feed, input_feed)
             self.tensorboard_writer.add_summary(val_tb, step)
         else:
-            loss, norm, step = session.run(output_feed, input_feed) 
+            loss, norm, step = session.run(output_feed, input_feed)
 
         return loss, norm, step
 
-    
+
 
     def optimize(self, session, batch):
         """
@@ -590,7 +590,7 @@ class QASystem(object):
         output_feed.append(self.global_norm)
         output_feed.append(self.global_step)
 
-       
+
         if self.FLAGS.tb is True:
             output_feed.append(self.train_loss_tb)
             output_feed.append(self.global_norm_tb)
@@ -600,7 +600,7 @@ class QASystem(object):
             self.tensorboard_writer.add_summary(norm_tb, step)
             self.tensorboard_writer.add_summary(lr_tb, step)
         else:
-            tr, loss, norm, step = session.run(output_feed, input_feed) 
+            tr, loss, norm, step = session.run(output_feed, input_feed)
 
         return loss, norm, step
 
@@ -623,7 +623,7 @@ class QASystem(object):
         :return:
         """
         if self.FLAGS.tb is True:
-            tensorboard_path = os.path.join(self.FLAGS.log_dir, "tensorboard")       
+            tensorboard_path = os.path.join(self.FLAGS.log_dir, "tensorboard")
             self.tensorboard_writer = tf.summary.FileWriter(tensorboard_path, session.graph)
 
         tic = time.time()
@@ -644,7 +644,7 @@ class QASystem(object):
 
         train_data = zip(dataset["train_questions"], dataset["train_questions_mask"], dataset["train_context"], dataset["train_context_mask"], dataset["train_span"], dataset["train_answer"])
         val_data = zip(dataset["val_questions"], dataset["val_questions_mask"], dataset["val_context"], dataset["val_context_mask"], dataset["val_span"], dataset["val_answer"])
-        
+
         #get rid of too long answers
         train_data = [d for d in train_data if d[4][1] < self.FLAGS.max_paragraph_size]
 
@@ -673,7 +673,7 @@ class QASystem(object):
                     val_loss, val_norm, val_step = self.validate(session, val_batches[i%num_val_batches])
                     val_losses[int((step/validate_on_every) % val_loss_window)] = val_loss
                     mean_val_loss = np.mean(val_losses)
-                
+
                 #Print relevant params
                 num_complete = int(20*(self.FLAGS.batch_size*float(i+1)/num_data))
                 if not self.FLAGS.background:
@@ -684,7 +684,7 @@ class QASystem(object):
                     logging.info("EPOCH: %d ==> (Avg Loss: [Train: %.3f][Val: %.3f] <--> Batch Loss: %.3f) [%-20s] (Completion:%d/%d) [norm: %.2f] [Step: %d]" % (cur_epoch + 1, mean_loss, mean_val_loss, loss, '='*num_complete, (i+1)*self.FLAGS.batch_size, num_data, norm, step))
 
             sys.stdout.write('\n')
-            
+
             #Save model after each epoch
             if not os.path.exists(checkpoint_path):
                 os.makedirs(checkpoint_path)
