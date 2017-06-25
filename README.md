@@ -8,7 +8,7 @@ The project has several dependencies that have to be satisfied before running th
 ## Requirements
 The code provided pressuposes a working installation of Python 2.7, as well as TensorFlow 0.12.1.
 
-It should also install all needed dependnecies through
+It should also install all needed dependencies through
 `pip install -r requirements.txt`.
 
 ## Data and Preprocessing
